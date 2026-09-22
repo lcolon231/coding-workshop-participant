@@ -29,7 +29,10 @@ _DEFAULT_HOST = "localhost"
 _DEFAULT_PORT = 5432
 _DEFAULT_NAME = "postgres"
 _DEFAULT_USER = "postgres"
-_DEFAULT_PASS = "postgres123"  # nosec B105 - local dev default, set by bin/setup-environment.sh
+# The local development password that bin/setup-environment.sh sets on the
+# native PostgreSQL. Not a production credential: in the cloud this value is
+# always overridden by the injected POSTGRES_PASS (infra/locals.tf:108).
+_DEFAULT_PASS = "postgres123"  # nosec B105
 
 _ACCESS_TTL_SECONDS = 30 * 60
 _REFRESH_TTL_SECONDS = 7 * 24 * 60 * 60

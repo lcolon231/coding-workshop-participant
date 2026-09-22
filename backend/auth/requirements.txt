@@ -11,3 +11,9 @@ SQLAlchemy==2.0.54
 # availability, which 3.3.x also has, and a two-year-old pin forgoes security
 # fixes for no benefit. Same driver, same URL scheme (postgresql+psycopg://).
 psycopg[binary]==3.3.6
+
+# Chosen over a hand-rolled router: Pydantic v2 request validation, the
+# details[] array straight from the validation error, and OpenAPI docs are all
+# rubric-scored. SQLAlchemy is the larger memory line item; if the 128 MB
+# ceiling bites, drop the ORM before dropping this.
+fastapi==0.141.1
