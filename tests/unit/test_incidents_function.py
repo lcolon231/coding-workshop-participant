@@ -80,7 +80,9 @@ class TestHttp:
         assert response["statusCode"] == 200
         schema = json.loads(response["body"])
         assert schema["info"]["title"].endswith("incidents")
-        assert all(path.startswith("/api/incidents/") for path in schema["paths"])
+        assert all(
+            p == "/api/incidents" or p.startswith("/api/incidents/") for p in schema["paths"]
+        )
 
     def test_builds_the_adapter_once_and_reuses_it(self, function: ModuleType) -> None:
         function.handler(function_url_event(), None)
