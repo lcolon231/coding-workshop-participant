@@ -9,14 +9,14 @@ Derived from the brief, the rubric in [`../full-stack.md`](../full-stack.md), an
 | Phase | Scope | Done |
 |---|---|---|
 | 0 | Tooling foundation | 5 / 5 |
-| 1 | `acme_core` shared kernel | 19 / 29 |
+| 1 | `acme_core` shared kernel | 21 / 29 |
 | 2 | `auth` service | 0 / 14 |
 | 3 | `incidents` service | 0 / 16 |
 | 4 | `facilities` service | 0 / 10 |
 | 5 | Frontend | 0 / 24 |
 | 6 | Cloud, CI and operations | 0 / 12 |
 | 7 | Documentation and handover | 0 / 7 |
-| | **Total** | **24 / 117** |
+| | **Total** | **26 / 117** |
 
 ---
 
@@ -49,8 +49,8 @@ Derived from the brief, the rubric in [`../full-stack.md`](../full-stack.md), an
 - [x] **T22** `tests/integration/conftest.py` — throwaway `acme_test_<pid>`, real `upgrade_head()`, savepoint rollback, `verify_session`, stale-DB sweep, correct dispose ordering.
 - [x] **T23** `test_migrations.py` — upgrade → **downgrade base → upgrade**; **no pending autogenerate diff**; 12 tables; naming convention applied.
 - [x] **T24** `test_model_constraints.py` — uniqueness, dangling FKs, stamp defaults NULL, enum round-trip.
-- [ ] **T25** `workflow.py` — `TransitionRule`, 7-edge `TRANSITIONS`, `actors_for`, `validate_transition` (edge → actor → fields), `allowed_targets`, **per-field** `STAMP_ON_ENTER`.
-- [ ] **T26** Workflow tests — hand-written oracle, 300-cell cross product, `actors_for` oracle, admin bypass pair, required fields incl. whitespace-only, `allowed_targets`, stamps incl. reopen.
+- [x] **T25** `workflow.py` — `TransitionRule`, 7-edge `TRANSITIONS`, `actors_for`, `validate_transition` (edge → actor → fields), `allowed_targets`, **per-field** `STAMP_ON_ENTER`.
+- [x] **T26** Workflow tests — hand-written oracle, 300-cell cross product, `actors_for` oracle, admin bypass pair, required fields incl. whitespace-only, `allowed_targets`, stamps incl. reopen.
 - [ ] **T27** `security/passwords.py` — bcrypt direct, reject >72 **bytes**, module-level dummy hash for constant-time login.
 - [ ] **T28** `security/secret.py` — 32 random bytes via `INSERT ... ON CONFLICT DO NOTHING`, cached in a module global.
 - [ ] **T29** `security/tokens.py` — PyJWT, pinned `algorithms=["HS256"]`, `typ`/`iss`/`aud`/`jti`/`iat`, reject absent `typ`.
