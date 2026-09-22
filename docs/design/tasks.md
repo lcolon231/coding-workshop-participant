@@ -17,7 +17,7 @@ are placed in the phase where they belong.
 | 2 | `auth` service | 16 / 16 |
 | 3 | `incidents` service | 15 / 16 |
 | 4 | `facilities` service | 0 / 10 |
-| 5 | Frontend | 5 / 24 |
+| 5 | Frontend | 10 / 24 |
 | 6 | Cloud, CI and operations | 0 / 12 |
 | 7 | Documentation and handover | 0 / 7 |
 | | **Total** | **56 / 120** |
@@ -125,14 +125,14 @@ Currently one line of work is allocated. **Roughly 2.5 of the rubric's 5 compete
 - [x] **T76** Fix `eslint.config.js` — it references two plugins missing from `package.json`, so `npm run lint` fails on a clean install. *(plugins installed; fast-refresh rule scoped off test files)*
 - [x] **T77** Add a real `npm test` script — there is none today, so `npm test` fails outright. *(`vitest run`)*
 - [~] **T78** Install MUI, React Router, React Responsive. *(MUI 9 + React Router 7 installed with the auth screens; React Responsive lands with T90)*
-- [~] **T79** API client — bearer injection, refresh-on-401 with rotation, and the **content-type guard** (CloudFront rewrites API 404s to `200 index.html`). *(`services/api.js`: envelope parsing, content-type guard and network errors done; refresh-on-401 pending)*
-- [~] **T80** Auth context and protected routes. *(`services/session.js` + `RequireSession` redirect in `App.jsx`; the context itself pending)*
+- [x] **T79** API client — bearer injection, refresh-on-401 with rotation, and the **content-type guard** (CloudFront rewrites API 404s to `200 index.html`). *(`services/api.js`: `authedRequest` attaches the bearer, rotates once on 401 with concurrent callers sharing the rotation, never replays a retired refresh token, and ends the session only on an API refusal, not a network failure)*
+- [x] **T80** Auth context and protected routes. *(`auth/AuthProvider.jsx` loads `GET /me` whenever a session appears, so role and name come from the server; `RequireUser` in `App.jsx` shows a frame while loading, redirects when anonymous, offers retry on failure)*
 - [x] **T81** Login and registration screens with inline field errors from `details[]`. *(`lib/formErrors.js` routes known fields inline and the rest to a form-level alert; 27 component and client tests)*
-- [ ] **T82** App shell — responsive navigation, role-aware menu.
-- [ ] **T83** Incident list — filters, pagination, empty/loading/error states.
-- [ ] **T84** Incident detail — notes, history timeline, internal notes hidden for employees.
-- [ ] **T85** Incident create form — building/floor/seat cascade, client validation before submit.
-- [ ] **T86** Transition controls driven by `GET /api/incidents/workflow` — only legal actions rendered, required fields prompted.
+- [x] **T82** App shell — responsive navigation, role-aware menu. *(`components/AppShell.jsx`: one 64px bar, wordmark, primary links, report action, account menu showing name and role; report action collapses to an icon on phones)*
+- [x] **T83** Incident list — filters, pagination, empty/loading/error states. *(`pages/IncidentsPage.jsx`: filters and page live in the URL, search debounced, table above `md` and stacked rows below, engineers get "Assigned to me"; 8 tests)*
+- [x] **T84** Incident detail — notes, history timeline, internal notes hidden for employees. *(`pages/IncidentPage.jsx`: notes with a staff-only visibility toggle, history, details with facility names resolved when the facilities service answers, escalation requests, admin triage of assignee and priority through `PUT`; 404 and per-section failures handled; 8 tests)*
+- [x] **T85** Incident create form — building/floor/seat cascade, client validation before submit. *(`pages/NewIncidentPage.jsx` against api.md §3; the facilities service (T65-T71) is not built yet, so locally the form shows the "buildings could not be loaded" state until it lands; 5 tests)*
+- [x] **T86** Transition controls driven by the workflow — only legal actions rendered, required fields prompted. *(driven by `allowed_transitions` on the incident, the per-incident answer api.md I3 prescribes for the UI; `TransitionDialog` prompts for exactly `requires`, engineers self-assign, admins choose from active engineers)*
 - [ ] **T87** Admin screens — user management, role assignment.
 - [ ] **T88** Facilities management screens.
 - [ ] **T89** Reporting dashboard — SLA and volume charts.
