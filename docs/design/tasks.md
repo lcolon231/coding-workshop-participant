@@ -14,7 +14,7 @@ are placed in the phase where they belong.
 |---|---|---|
 | 0 | Tooling foundation | 6 / 6 |
 | 1 | `acme_core` shared kernel | 30 / 30 |
-| 2 | `auth` service | 15 / 16 |
+| 2 | `auth` service | 16 / 16 |
 | 3 | `incidents` service | 15 / 16 |
 | 4 | `facilities` service | 0 / 10 |
 | 5 | Frontend | 5 / 24 |
@@ -81,7 +81,7 @@ are placed in the phase where they belong.
 - [x] **T119** `POST /me/password` — verify current password, bump `sessions_valid_from`, revoke refresh tokens, 204 *(api.md A7)*.
 - [x] **T120** User profile fields — `occupation` (required iff Employee, cleared on leaving Employee) and `date_of_birth` (required for every user, never after today, not before 1900); migration `8c235859e485`; exact `email` filter on `GET /users` so an admin can find a user to promote.
 - [x] **T45** `admin_actions.py` — `migrate` / `seed` / `db-current`; `seed` requires `confirm == APP_ID`.
-- [~] **T46** `seed.py` — idempotent `uuid5` get-or-create, password **from payload**, strictly additive, histories replayed through `validate_transition`. *(users done; facilities, categories and incident histories land with their services)*
+- [x] **T46** `seed.py` — idempotent `uuid5` get-or-create, password **from payload**, strictly additive, histories replayed through `validate_transition`. *(two buildings with floors and seats, a two-level category tree, six incidents across every status; reporters resolved by email so a pre-registered account keeps its id)*
 - [x] **T47** Integration tests — register, login, refresh, me, admin users, `test_route_contract`, `test_error_envelope`, `test_seed`, `test_readyz_migrations`. *(79 API + 11 seed tests; route contract driven from the OpenAPI schema)*
 - [x] **T48** `tests/e2e/test_auth_journey.py` — real uvicorn, real commits across connections. *(throwaway `acme_e2e_<pid>` database, `tools.devserver:app` as a child process, every persistence assertion over a fresh `NullPool` connection; 7 tests, ~9 s)*
 
