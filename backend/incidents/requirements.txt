@@ -1,0 +1,24 @@
+# Runtime dependencies for the incidents Lambda. Exact == pins: infra/lambda.tf
+# sets build_in_docker = false, so these resolve against the deploy host's
+# Python (the VDI: linux-x86_64, CPython 3.13, matching the python3.13 runtime
+# in infra/locals.tf:56). The versions are the auth service's, on purpose: the
+# two functions share acme_core and must agree on every library it imports.
+
+SQLAlchemy==2.0.54
+psycopg[binary]==3.3.6
+fastapi==0.141.1
+
+# Not alembic. Migrations and the seed ship only with the auth function
+# (tools/sync-shared.sh AUTH_ONLY), so there is one door to a schema change.
+# /readyz imports the migration check lazily and reports `migrations_pending:
+# null` when it is absent, rather than failing.
+
+# acme_core.security imports both at package import, so they are needed even
+# though this service never hashes a password or validates an address itself.
+bcrypt==5.0.0
+email-validator==2.3.0
+# Access-token verification for every authenticated route.
+PyJWT==2.11.0
+
+# ASGI -> Lambda adapter. Imported lazily in function.py, only for HTTP events.
+mangum==0.22.0

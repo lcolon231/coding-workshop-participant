@@ -12,15 +12,15 @@ are placed in the phase where they belong.
 
 | Phase | Scope | Done |
 |---|---|---|
-| 0 | Tooling foundation | 5 / 5 |
+| 0 | Tooling foundation | 6 / 6 |
 | 1 | `acme_core` shared kernel | 30 / 30 |
-| 2 | `auth` service | 14 / 16 |
-| 3 | `incidents` service | 0 / 16 |
+| 2 | `auth` service | 15 / 16 |
+| 3 | `incidents` service | 1 / 16 |
 | 4 | `facilities` service | 0 / 10 |
-| 5 | Frontend | 0 / 24 |
+| 5 | Frontend | 5 / 24 |
 | 6 | Cloud, CI and operations | 0 / 12 |
 | 7 | Documentation and handover | 0 / 7 |
-| | **Total** | **49 / 120** |
+| | **Total** | **56 / 120** |
 
 ---
 
@@ -31,6 +31,7 @@ are placed in the phase where they belong.
 - [x] **T3** `tools/verify-sync.sh` + `tools/db.sh`: staleness guard and synchronous admin-invoke wrapper.
 - [x] **T4** `Makefile` with 16 targets; `deploy` depends on `sync` + `verify-sync`.
 - [x] **T5** `backend/auth` stub, `.gitignore`, `pyrightconfig.json` excluding vendored copies.
+- [x] **T121** `tools/devserver.py` combined mode — `make serve` runs every discovered service in one process behind a prefix dispatcher, so the single Vite proxy rule (T75) reaches `/api/incidents` locally as CloudFront does in the cloud; `SERVICE=<name>` keeps the one-Lambda shape. `/api/docs` is one Swagger page over every service (merged schema; local only, since CloudFront routes nothing at that path).
 
 ## Phase 1 — `acme_core` shared kernel ✅
 
@@ -82,11 +83,11 @@ are placed in the phase where they belong.
 - [x] **T45** `admin_actions.py` — `migrate` / `seed` / `db-current`; `seed` requires `confirm == APP_ID`.
 - [~] **T46** `seed.py` — idempotent `uuid5` get-or-create, password **from payload**, strictly additive, histories replayed through `validate_transition`. *(users done; facilities, categories and incident histories land with their services)*
 - [x] **T47** Integration tests — register, login, refresh, me, admin users, `test_route_contract`, `test_error_envelope`, `test_seed`, `test_readyz_migrations`. *(79 API + 11 seed tests; route contract driven from the OpenAPI schema)*
-- [ ] **T48** `tests/e2e/test_auth_journey.py` — real uvicorn, real commits across connections.
+- [x] **T48** `tests/e2e/test_auth_journey.py` — real uvicorn, real commits across connections. *(throwaway `acme_e2e_<pid>` database, `tools.devserver:app` as a child process, every persistence assertion over a fresh `NullPool` connection; 7 tests, ~9 s)*
 
 ## Phase 3 — `incidents` service
 
-- [ ] **T49** Service scaffold: `requirements.txt`, `function.py`, `incidents_service/` package.
+- [x] **T49** Service scaffold: `requirements.txt`, `function.py`, `incidents_service/` package. *(no alembic: migrations stay auth-only, so `function.py` refuses admin commands by name; `make serve SERVICE=incidents` now exports `ACME_SERVICE_NAME`)*
 - [ ] **T50** `POST /api/incidents` — reporter from principal, never from the body.
 - [ ] **T51** `GET /api/incidents` — filters (status, priority, building, assignee, free-text) + pagination, all through `scope_incidents`; `total` counted through the same helper.
 - [ ] **T52** `GET /api/incidents/{id}` — scoped read, **404 not 403**.
@@ -120,13 +121,13 @@ are placed in the phase where they belong.
 
 Currently one line of work is allocated. **Roughly 2.5 of the rubric's 5 competencies score here.**
 
-- [ ] **T75** `vite.config.js` — `server.proxy` `/api` → `:8000`, **unrewritten**, so local and cloud paths match.
-- [ ] **T76** Fix `eslint.config.js` — it references two plugins missing from `package.json`, so `npm run lint` fails on a clean install.
-- [ ] **T77** Add a real `npm test` script — there is none today, so `npm test` fails outright.
-- [ ] **T78** Install MUI, React Router, React Responsive.
-- [ ] **T79** API client — bearer injection, refresh-on-401 with rotation, and the **content-type guard** (CloudFront rewrites API 404s to `200 index.html`).
-- [ ] **T80** Auth context and protected routes.
-- [ ] **T81** Login and registration screens with inline field errors from `details[]`.
+- [x] **T75** `vite.config.js` — `server.proxy` `/api` → `:8000`, **unrewritten**, so local and cloud paths match.
+- [x] **T76** Fix `eslint.config.js` — it references two plugins missing from `package.json`, so `npm run lint` fails on a clean install. *(plugins installed; fast-refresh rule scoped off test files)*
+- [x] **T77** Add a real `npm test` script — there is none today, so `npm test` fails outright. *(`vitest run`)*
+- [~] **T78** Install MUI, React Router, React Responsive. *(MUI 9 + React Router 7 installed with the auth screens; React Responsive lands with T90)*
+- [~] **T79** API client — bearer injection, refresh-on-401 with rotation, and the **content-type guard** (CloudFront rewrites API 404s to `200 index.html`). *(`services/api.js`: envelope parsing, content-type guard and network errors done; refresh-on-401 pending)*
+- [~] **T80** Auth context and protected routes. *(`services/session.js` + `RequireSession` redirect in `App.jsx`; the context itself pending)*
+- [x] **T81** Login and registration screens with inline field errors from `details[]`. *(`lib/formErrors.js` routes known fields inline and the rest to a form-level alert; 27 component and client tests)*
 - [ ] **T82** App shell — responsive navigation, role-aware menu.
 - [ ] **T83** Incident list — filters, pagination, empty/loading/error states.
 - [ ] **T84** Incident detail — notes, history timeline, internal notes hidden for employees.
@@ -140,7 +141,7 @@ Currently one line of work is allocated. **Roughly 2.5 of the rubric's 5 compete
 - [ ] **T92** Consistent loading / success / failure feedback across every mutation.
 - [ ] **T93** "Waking the database" state for the Aurora resume case, rather than a generic spinner.
 - [ ] **T94** PWA — manifest, service worker, offline shell *(rubric §5)*.
-- [ ] **T95** Vitest + React Testing Library setup.
+- [x] **T95** Vitest + React Testing Library setup. *(jsdom, `src/test/setup.js`, router-aware `renderPage` helper)*
 - [ ] **T96** Component tests to **80%+** *(rubric)*.
 - [ ] **T97** Playwright config + proxy spec (`/api/auth/login` → 400, proving the proxy wiring).
 - [ ] **T98** E2E on critical paths — login → create incident → transition → resolve *(rubric wants 100% of critical paths)*.
