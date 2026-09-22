@@ -32,7 +32,7 @@ venv: ## Create .venv and install runtime + dev dependencies
 	@echo "venv ready: $(VENV)"
 
 serve: ## Run the service locally with uvicorn (:8000)
-	$(VENV)/bin/uvicorn auth_service.app:app --reload --port $(PORT)
+	$(VENV)/bin/uvicorn --factory tools.devserver:app --reload --port $(PORT)
 
 migrate: ## Apply migrations to the local database
 	$(PY) -m acme_core.db.migrate upgrade
