@@ -18,7 +18,7 @@ from collections.abc import Awaitable, Callable, Sequence
 from typing import Any
 
 from fastapi import APIRouter, FastAPI, Request, Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from acme_core import build_stamp
 from acme_core.errors import register_exception_handlers
@@ -44,8 +44,7 @@ class BuildInfo(BaseModel):
 
     git_sha: str = Field(
         description="Short commit the vendored acme_core was synced from, "
-        "or 'source' when running from the working tree.",
-        examples=["9064bc9"],
+        "or 'source' when running from the working tree."
     )
     dirty: bool | None = Field(
         default=None,
@@ -59,18 +58,39 @@ class BuildInfo(BaseModel):
 class HealthResponse(BaseModel):
     """Liveness and which build is answering."""
 
-    status: str = Field(description="Always 'ok'; a failure is a non-200.", examples=["ok"])
-    service: str = Field(description="Service name, matching its path prefix.", examples=["auth"])
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "status": "ok",
+                    "service": "auth",
+                    "build": {
+                        "git_sha": "62f6f2d",
+                        "dirty": False,
+                        "stamped_at": "2026-09-22T19:29:19Z",
+                    },
+                }
+            ]
+        }
+    )
+
+    status: str = Field(description="Always 'ok'; a failure is a non-200.")
+    service: str = Field(description="Service name, matching its path prefix.")
     build: BuildInfo
 
 
 class ReadinessResponse(BaseModel):
     """Whether this instance can serve traffic, and why not if it cannot."""
 
-    status: str = Field(
-        description="'ready' or 'not_ready'. Mirrors the status code.",
-        examples=["ready"],
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {"status": "ready", "database": True, "migrations_pending": False}
+            ]
+        }
     )
+
+    status: str = Field(description="'ready' or 'not_ready'. Mirrors the status code.")
     database: bool = Field(description="Whether the database answered.")
     migrations_pending: bool | None = Field(
         default=None,
@@ -195,6 +215,28 @@ def _health_router(service_name: str) -> APIRouter:
             503: {
                 "model": ReadinessResponse,
                 "description": "Database unreachable, or migrations are pending.",
+                "content": {
+                    "application/json": {
+                        "examples": {
+                            "migrations_pending": {
+                                "summary": "Schema is behind the deployed code",
+                                "value": {
+                                    "status": "not_ready",
+                                    "database": True,
+                                    "migrations_pending": True,
+                                },
+                            },
+                            "database_unreachable": {
+                                "summary": "Database did not answer",
+                                "value": {
+                                    "status": "not_ready",
+                                    "database": False,
+                                    "migrations_pending": None,
+                                },
+                            },
+                        }
+                    }
+                },
             }
         },
     )

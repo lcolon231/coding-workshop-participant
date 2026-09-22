@@ -224,3 +224,25 @@ class TestPublishedDocumentation:
         block = error_responses(400, 404)
         assert block[400]["model"] is ErrorResponse
         assert "details" in ErrorResponse.model_fields
+
+    def test_examples_describe_states_the_code_can_actually_produce(
+        self, schema: dict
+    ) -> None:
+        """Field-level examples compose independently into impossible objects.
+
+        `status: "ready"` with `migrations_pending: true` cannot happen, but it
+        is what per-field examples render unless the model supplies a whole one.
+        """
+        example = schema["components"]["schemas"]["ReadinessResponse"]["examples"][0]
+        assert (example["status"] == "ready") is (example["migrations_pending"] is False)
+
+    def test_failure_example_differs_from_the_success_example(
+        self, schema: dict
+    ) -> None:
+        """A 503 documented with the 200's body teaches a reader nothing."""
+        ok = schema["components"]["schemas"]["ReadinessResponse"]["examples"][0]
+        failures = schema["paths"]["/api/auth/readyz"]["get"]["responses"]["503"][
+            "content"
+        ]["application/json"]["examples"]
+        assert all(case["value"] != ok for case in failures.values())
+        assert all(case["value"]["status"] == "not_ready" for case in failures.values())
