@@ -1,0 +1,81 @@
+# Tooling configuration only. This is deliberately NOT a build backend: nothing
+# here is packaged or installed. `pythonpath` below is what lets the test suite
+# import `acme_core` from its source of truth rather than a synced copy.
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+# Source of truth first. Tests must never exercise backend/auth/acme_core (the
+# rsynced build artifact) or they could pass against a stale copy.
+pythonpath = ["backend/_shared", "backend/auth"]
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+    # unit/ and integration/ both contain same-named files; prepend mode collides.
+    "--import-mode=importlib",
+    # Cloud tests need a deployed environment; opt in with `-m cloud`.
+    "-m", "not cloud",
+]
+markers = [
+    "unit: no I/O; a guard fixture makes create_engine raise",
+    "integration: needs a real throwaway PostgreSQL database",
+    "e2e: drives a real uvicorn process over HTTP",
+    "cloud: runs against a deployed environment; needs API_BASE_URL; deselected by default",
+]
+filterwarnings = ["error", "ignore::DeprecationWarning:mangum.*"]
+xfail_strict = true
+
+[tool.coverage.run]
+# Packages, never "backend/auth" -- that directory holds vendored dependencies
+# at build time and would inflate the denominator into meaninglessness.
+source = ["acme_core", "auth_service"]
+branch = true
+parallel = true
+relative_files = true
+omit = [
+    # Verified by executing upgrade/downgrade in test_migrations.py, not by line count.
+    "*/migrations/*",
+    # Stale rsync copies; the source of truth is backend/_shared.
+    "backend/*/acme_core/*",
+]
+
+[tool.coverage.paths]
+source = ["backend/_shared/acme_core", "*/backend/_shared/acme_core", "*/acme_core"]
+
+[tool.coverage.report]
+# RATCHET: raised every commit, never introduced at the end. 0 at commit 1
+# because no code exists yet; commit 2 sets a real floor.
+fail_under = 0
+show_missing = true
+skip_covered = false
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "@(abc\\.)?abstractmethod",
+    "if __name__ == .__main__.:",
+]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+src = ["backend/_shared", "backend/auth", "tests"]
+extend-exclude = [
+    # Repo-provided reference code. Not ours to restyle, and changing it would
+    # diverge from upstream for no benefit.
+    "backend/_examples",
+    # Vendored build artifacts; linting them duplicates every finding.
+    "backend/*/acme_core",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "S", "ANN", "D"]
+# S101 (assert) is allowed in tests only -- see per-file-ignores. In application
+# code a bare assert is stripped by python -O and trips bandit B101.
+ignore = ["D203", "D213", "ANN401"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101", "D", "ANN"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
