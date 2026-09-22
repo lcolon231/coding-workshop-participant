@@ -14,13 +14,13 @@ are placed in the phase where they belong.
 |---|---|---|
 | 0 | Tooling foundation | 5 / 5 |
 | 1 | `acme_core` shared kernel | 30 / 30 |
-| 2 | `auth` service | 14 / 16 |
-| 3 | `incidents` service | 0 / 16 |
+| 2 | `auth` service | 15 / 16 |
+| 3 | `incidents` service | 1 / 16 |
 | 4 | `facilities` service | 0 / 10 |
 | 5 | Frontend | 0 / 24 |
 | 6 | Cloud, CI and operations | 0 / 12 |
 | 7 | Documentation and handover | 0 / 7 |
-| | **Total** | **49 / 120** |
+| | **Total** | **51 / 120** |
 
 ---
 
@@ -82,11 +82,11 @@ are placed in the phase where they belong.
 - [x] **T45** `admin_actions.py` — `migrate` / `seed` / `db-current`; `seed` requires `confirm == APP_ID`.
 - [~] **T46** `seed.py` — idempotent `uuid5` get-or-create, password **from payload**, strictly additive, histories replayed through `validate_transition`. *(users done; facilities, categories and incident histories land with their services)*
 - [x] **T47** Integration tests — register, login, refresh, me, admin users, `test_route_contract`, `test_error_envelope`, `test_seed`, `test_readyz_migrations`. *(79 API + 11 seed tests; route contract driven from the OpenAPI schema)*
-- [ ] **T48** `tests/e2e/test_auth_journey.py` — real uvicorn, real commits across connections.
+- [x] **T48** `tests/e2e/test_auth_journey.py` — real uvicorn, real commits across connections. *(throwaway `acme_e2e_<pid>` database, `tools.devserver:app` as a child process, every persistence assertion over a fresh `NullPool` connection; 7 tests, ~9 s)*
 
 ## Phase 3 — `incidents` service
 
-- [ ] **T49** Service scaffold: `requirements.txt`, `function.py`, `incidents_service/` package.
+- [x] **T49** Service scaffold: `requirements.txt`, `function.py`, `incidents_service/` package. *(no alembic: migrations stay auth-only, so `function.py` refuses admin commands by name; `make serve SERVICE=incidents` now exports `ACME_SERVICE_NAME`)*
 - [ ] **T50** `POST /api/incidents` — reporter from principal, never from the body.
 - [ ] **T51** `GET /api/incidents` — filters (status, priority, building, assignee, free-text) + pagination, all through `scope_incidents`; `total` counted through the same helper.
 - [ ] **T52** `GET /api/incidents/{id}` — scoped read, **404 not 403**.
