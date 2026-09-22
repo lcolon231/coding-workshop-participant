@@ -131,6 +131,9 @@ class IncidentNote(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
 
     incident: Mapped["Incident"] = relationship(back_populates="notes")
+    # One-directional: nothing needs "every note this user wrote", and a
+    # back-reference would load that list onto User for no reader.
+    author: Mapped["User"] = relationship(foreign_keys=[author_id])
 
     __table_args__ = (Index("ix_incident_notes_incident_id", "incident_id"),)
 
@@ -170,6 +173,7 @@ class IncidentStatusHistory(UUIDPrimaryKeyMixin, Base):
     )
 
     incident: Mapped["Incident"] = relationship(back_populates="status_history")
+    actor: Mapped["User"] = relationship(foreign_keys=[actor_id])
 
     __table_args__ = (
         Index("ix_incident_status_history_incident_id", "incident_id", "created_at"),
@@ -204,6 +208,8 @@ class EscalationRequest(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     decision_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     incident: Mapped["Incident"] = relationship(back_populates="escalations")
+    requested_by: Mapped["User"] = relationship(foreign_keys=[requested_by_id])
+    decided_by: Mapped[Optional["User"]] = relationship(foreign_keys=[decided_by_id])
 
     __table_args__ = (Index("ix_escalation_requests_incident_id", "incident_id"),)
 

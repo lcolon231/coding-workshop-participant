@@ -4,12 +4,24 @@ from __future__ import annotations
 
 import datetime as dt
 import uuid
-from typing import Annotated
+from typing import Annotated, ClassVar
 
-from pydantic import Field, model_validator
+from pydantic import ConfigDict, Field, field_validator, model_validator
 
-from acme_core.models.enums import IncidentStatus, NoteVisibility, Priority
-from acme_core.schemas.common import PageParams, ResponseModel, StrictModel
+from acme_core.models.enums import EscalationStatus, IncidentStatus, NoteVisibility, Priority
+from acme_core.schemas.auth import UserSummary
+from acme_core.schemas.common import (
+    Order,
+    PageParams,
+    ResponseModel,
+    StrictModel,
+    UpdateModel,
+)
+from acme_core.workflow import Actor
+
+Title = Annotated[str, Field(min_length=1, max_length=200)]
+Body = Annotated[str, Field(min_length=1)]
+LongNote = Annotated[str, Field(max_length=4000)]
 
 
 class IncidentCreate(StrictModel):
@@ -21,8 +33,9 @@ class IncidentCreate(StrictModel):
     incident as another, or skip the state machine entirely.
     """
 
-    title: Annotated[str, Field(min_length=1, max_length=200)]
-    description: Annotated[str, Field(min_length=1)]
+    title: Title
+    description: Body
+    # The reporter's own view of urgency. Only an admin may change it later.
     priority: Priority = Priority.MEDIUM
     category_id: uuid.UUID | None = None
     # Required: every incident happens somewhere.
@@ -39,16 +52,22 @@ class IncidentCreate(StrictModel):
         return self
 
 
-class IncidentUpdate(StrictModel):
+class IncidentUpdate(UpdateModel):
     """Edit an incident's details.
 
     Status is absent on purpose: it moves only through
     POST /api/incidents/{id}/transition, which applies the workflow rules.
     A generic PUT that accepted `status` would bypass them entirely.
+
+    Which caller may change which field -- the reporter edits the text while
+    the incident is Open, only an admin touches priority or assignee -- depends
+    on the row, so the service enforces it. `null` unassigns or uncategorises.
     """
 
-    title: Annotated[str | None, Field(min_length=1, max_length=200)] = None
-    description: Annotated[str | None, Field(min_length=1)] = None
+    CLEARABLE: ClassVar[frozenset[str]] = frozenset({"category_id", "assignee_id"})
+
+    title: Title | None = None
+    description: Body | None = None
     priority: Priority | None = None
     category_id: uuid.UUID | None = None
     assignee_id: uuid.UUID | None = None
@@ -63,8 +82,8 @@ class TransitionRequest(StrictModel):
 
     target_status: IncidentStatus
     assignee_id: uuid.UUID | None = None
-    resolution_note: Annotated[str | None, Field(max_length=4000)] = None
-    blocked_reason: Annotated[str | None, Field(max_length=4000)] = None
+    resolution_note: LongNote | None = None
+    blocked_reason: LongNote | None = None
 
 
 class IncidentFilters(PageParams):
@@ -73,19 +92,22 @@ class IncidentFilters(PageParams):
     status: IncidentStatus | None = None
     priority: Priority | None = None
     building_id: uuid.UUID | None = None
+    category_id: uuid.UUID | None = None
     assignee_id: uuid.UUID | None = None
     search: Annotated[str | None, Field(max_length=200)] = None
     # A literal allowlist, never a raw column name. Interpolating a client
     # string into ORDER BY is injectable, and getattr(Model, value) allows
     # traversal onto relationships and dunder attributes.
     sort: Annotated[str, Field(pattern="^(created_at|priority|status|title)$")] = "created_at"
-    order: Annotated[str, Field(pattern="^(asc|desc)$")] = "desc"
+    order: Order = "desc"
 
 
 class NoteCreate(StrictModel):
     """Add a note to an incident."""
 
     body: Annotated[str, Field(min_length=1, max_length=4000)]
+    # An employee asking for "internal" is refused by the service, not
+    # downgraded: publishing what the author meant to keep private is worse.
     visibility: NoteVisibility = NoteVisibility.PUBLIC
 
 
@@ -95,6 +117,7 @@ class NoteOut(ResponseModel):
     id: uuid.UUID
     incident_id: uuid.UUID
     author_id: uuid.UUID
+    author: UserSummary
     body: str
     visibility: NoteVisibility
     created_at: dt.datetime
@@ -107,6 +130,7 @@ class StatusHistoryOut(ResponseModel):
     from_status: IncidentStatus | None
     to_status: IncidentStatus
     actor_id: uuid.UUID
+    actor: UserSummary
     note: str | None
     created_at: dt.datetime
 
@@ -119,8 +143,12 @@ class IncidentOut(ResponseModel):
     description: str
     status: IncidentStatus
     priority: Priority
+    # The ids stay alongside the summaries so a client can compare against
+    # its own id without reaching into a nested object.
     reporter_id: uuid.UUID
+    reporter: UserSummary
     assignee_id: uuid.UUID | None
+    assignee: UserSummary | None
     category_id: uuid.UUID | None
     building_id: uuid.UUID
     floor_id: uuid.UUID | None
@@ -133,3 +161,89 @@ class IncidentOut(ResponseModel):
     blocked_reason: str | None
     created_at: dt.datetime
     updated_at: dt.datetime
+
+
+class TransitionOption(ResponseModel):
+    """One action this caller may take on this incident right now."""
+
+    to: IncidentStatus
+    label: str
+    requires: list[str] = Field(description="Fields the request must supply, non-blank.")
+
+
+class IncidentDetailOut(IncidentOut):
+    """A single incident, with the actions available to the caller.
+
+    `allowed_transitions` comes from `workflow.allowed_targets`, the same code
+    the transition endpoint validates with, so the UI cannot offer a button the
+    API will refuse.
+    """
+
+    allowed_transitions: list[TransitionOption]
+
+
+class WorkflowTransitionOut(ResponseModel):
+    """One edge of the state machine, as `workflow.describe()` emits it."""
+
+    # `from` is a Python keyword, so the attribute is `source` and the wire
+    # name is `from`, in both directions.
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    source: IncidentStatus = Field(alias="from")
+    to: IncidentStatus
+    label: str
+    allowed_actors: list[Actor]
+    requires: list[str]
+
+
+class WorkflowOut(ResponseModel):
+    """The whole state machine, served at `GET /api/incidents/workflow`."""
+
+    statuses: list[IncidentStatus]
+    transitions: list[WorkflowTransitionOut]
+
+
+class EscalationCreate(StrictModel):
+    """Ask for an incident's priority to be raised."""
+
+    reason: Annotated[str, Field(min_length=1, max_length=4000)]
+
+
+class EscalationDecision(StrictModel):
+    """An admin's verdict on a pending escalation.
+
+    The field is `decision`, not `status`: `status` is server-controlled, and a
+    request schema carrying it would (rightly) fail the mass-assignment test.
+    """
+
+    decision: EscalationStatus
+    decision_note: LongNote | None = None
+
+    @field_validator("decision")
+    @classmethod
+    def _must_be_a_verdict(cls, value: EscalationStatus) -> EscalationStatus:
+        """Pending is where an escalation starts, not a decision about it."""
+        if value is EscalationStatus.PENDING:
+            raise ValueError("must be Approved or Rejected")
+        return value
+
+
+class EscalationFilters(PageParams):
+    """Query parameters for the admin escalation queue: oldest pending first."""
+
+    status: EscalationStatus | None = EscalationStatus.PENDING
+    order: Order = "asc"
+
+
+class EscalationOut(ResponseModel):
+    """An escalation request and, once made, its decision."""
+
+    id: uuid.UUID
+    incident_id: uuid.UUID
+    requested_by: UserSummary
+    reason: str
+    status: EscalationStatus
+    decided_by: UserSummary | None
+    decided_at: dt.datetime | None
+    decision_note: str | None
+    created_at: dt.datetime

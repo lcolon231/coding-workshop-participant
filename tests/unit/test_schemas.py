@@ -63,9 +63,12 @@ class TestMassAssignment:
         # optional field on it.
         "AdminCreateUserRequest": {"role"},
         "AdminUpdateUserRequest": {"role", "is_active"},
-        # A building being in service is a domain attribute an admin sets,
-        # not a security flag like users.is_active.
+        # Whether a building, seat or category is in service is a domain
+        # attribute an admin sets, not a security flag like users.is_active.
+        # All three endpoints are admin-only.
         "BuildingUpdate": {"is_active"},
+        "SeatUpdate": {"is_active"},
+        "CategoryUpdate": {"is_active"},
     }
 
     @pytest.mark.parametrize("model", request_models(), ids=lambda m: m.__name__)
