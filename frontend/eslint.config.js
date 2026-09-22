@@ -26,4 +26,9 @@ export default defineConfig([
       'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
     },
   },
+  {
+    // Tests and their helpers are never hot-reloaded.
+    files: ['**/*.test.{js,jsx}', 'src/test/**'],
+    rules: { 'react-refresh/only-export-components': 'off' },
+  },
 ])
