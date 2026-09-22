@@ -32,10 +32,11 @@ venv: ## Create .venv and install runtime + dev dependencies
 	test -s backend/$(SERVICE)/requirements.txt && $(PIP) install --quiet -r backend/$(SERVICE)/requirements.txt || true
 	@echo "venv ready: $(VENV)"
 
-# tools/devserver.py picks the service from this variable; without it,
-# `make serve SERVICE=incidents` would put incidents on the path but serve auth.
-serve: export ACME_SERVICE_NAME := $(SERVICE)
-serve: ## Run one service locally with uvicorn:  make serve [SERVICE=incidents] [PORT=8001]
+# Plain `make serve` runs every service in one process, one origin for the
+# Vite proxy, as CloudFront gives the browser in the cloud. Naming a SERVICE
+# on the command line runs that one alone, the shape its Lambda has.
+serve: export ACME_SERVICE_NAME := $(if $(filter command line,$(origin SERVICE)),$(SERVICE),all)
+serve: ## Run every service locally on one port (:8000), or one:  make serve SERVICE=incidents
 	$(VENV)/bin/uvicorn --factory tools.devserver:app --reload --port $(PORT)
 
 migrate: ## Apply migrations to the local database
@@ -63,7 +64,7 @@ cov: ## Run tests with coverage against the current ratchet
 	$(PYTEST) --cov --cov-report=term-missing --cov-report=html
 
 lint: ## Ruff + bandit, matching what CI runs
-	$(VENV)/bin/ruff check backend tests
+	$(VENV)/bin/ruff check backend tests tools
 	# Exclude only the VENDORED copies. '*/acme_core/*' would also match
 	# backend/_shared/acme_core and silently skip the real source.
 	$(VENV)/bin/bandit -q -r ./backend -x './backend/auth/acme_core,./backend/incidents/acme_core'

@@ -7,7 +7,8 @@ minversion = "8.0"
 testpaths = ["tests"]
 # Source of truth first. Tests must never exercise backend/auth/acme_core (the
 # rsynced build artifact) or they could pass against a stale copy.
-pythonpath = ["backend/_shared", "backend/auth", "backend/incidents"]
+# "." makes tools/ importable, so the dev server has a test.
+pythonpath = ["backend/_shared", "backend/auth", "backend/incidents", "."]
 addopts = [
     "-ra",
     "--strict-markers",
@@ -78,7 +79,7 @@ exclude_also = [
 [tool.ruff]
 target-version = "py313"
 line-length = 100
-src = ["backend/_shared", "backend/auth", "backend/incidents", "tests"]
+src = ["backend/_shared", "backend/auth", "backend/incidents", "tests", "."]
 extend-exclude = [
     # Repo-provided reference code. Not ours to restyle, and changing it would
     # diverge from upstream for no benefit.
