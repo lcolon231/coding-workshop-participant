@@ -12,7 +12,7 @@ from __future__ import annotations
 import datetime as dt
 import uuid
 
-from sqlalchemy import MetaData, func
+from sqlalchemy import DateTime, MetaData, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -39,10 +39,13 @@ class UUIDPrimaryKeyMixin:
     enumeration.
     """
 
+    # sort_order keeps id first in generated DDL; without it mixin columns land
+    # after the model's own, which makes migration diffs harder to read.
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         primary_key=True,
         default=uuid.uuid4,
+        sort_order=-100,
     )
 
 
@@ -53,12 +56,19 @@ class TimestampMixin:
     migration or by the seed's bulk paths -- are stamped consistently.
     """
 
+    # timezone=True throughout. Aurora runs UTC but a developer's local
+    # PostgreSQL may not, and mixing naive and aware timestamps makes SLA
+    # arithmetic silently wrong rather than loudly broken.
     created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True),
         server_default=func.now(),
         nullable=False,
+        sort_order=100,
     )
     updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True),
         server_default=func.now(),
         onupdate=func.now(),
         nullable=False,
+        sort_order=100,
     )

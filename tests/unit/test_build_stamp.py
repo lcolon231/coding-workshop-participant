@@ -20,6 +20,8 @@ pytestmark = pytest.mark.unit
 class TestBuildStamp:
     def test_reports_source_when_unstamped(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Running from the source tree, where sync has not generated a stamp."""
+        # Both are needed: `from acme_core import _build_stamp` resolves the
+        # package attribute once the submodule has been imported at all.
         monkeypatch.setitem(sys.modules, "acme_core._build_stamp", None)
         monkeypatch.delattr(acme_core, "_build_stamp", raising=False)
         stamp = acme_core.build_stamp()
@@ -32,6 +34,7 @@ class TestBuildStamp:
         fake.DIRTY = False  # type: ignore[attr-defined]
         fake.STAMPED_AT = "2026-09-22T00:00:00Z"  # type: ignore[attr-defined]
         monkeypatch.setitem(sys.modules, "acme_core._build_stamp", fake)
+        monkeypatch.setattr(acme_core, "_build_stamp", fake, raising=False)
         assert acme_core.build_stamp() == {
             "git_sha": "deadbee",
             "dirty": False,
@@ -45,6 +48,7 @@ class TestBuildStamp:
         fake.DIRTY = True  # type: ignore[attr-defined]
         fake.STAMPED_AT = "2026-09-22T00:00:00Z"  # type: ignore[attr-defined]
         monkeypatch.setitem(sys.modules, "acme_core._build_stamp", fake)
+        monkeypatch.setattr(acme_core, "_build_stamp", fake, raising=False)
         assert acme_core.build_stamp()["dirty"] is True
 
     def test_version_is_exported(self) -> None:

@@ -387,7 +387,7 @@ at commit 15, as the previous revision did, is the fake-the-number failure mode 
 **T4 — The unit tier must be DB-free by construction.** An autouse fixture in `tests/unit/`
 monkeypatches `sqlalchemy.create_engine` to raise. Otherwise the lazy module-global engine is a
 **silent-green** hazard: anything opening its own session (`seed`, `admin_actions`, `/readyz`)
-bypasses `dependency_overrides` and connects to `postgres/postgres123@localhost` — a database that
+bypasses `dependency_overrides` and connects to the local dev database — a database that
 exists and accepts writes. Root `conftest.py` sets the test DB env before any `acme_core` import and
 calls `get_settings.cache_clear()`; an autouse assertion checks the engine URL starts with
 `acme_test_`.
