@@ -160,9 +160,12 @@ field detail — the request is invalid. A missing entity in the **path** is `40
 Self-registration. Always creates an **Employee**.
 
 ```json
-{ "email": "jane@acme.inc", "password": "correct horse battery", "full_name": "Jane Doe" }
+{ "email": "jane@acme.inc", "password": "correct horse battery", "full_name": "Jane Doe",
+  "occupation": "Financial Analyst", "date_of_birth": "1995-01-30" }
 ```
 
+- `occupation` is required: self-registration always creates an Employee, and every Employee has
+  one. `date_of_birth` is required and may not be after today (UTC) or before 1900-01-01.
 - `email` must be exactly `@acme.inc` (case-insensitive, trimmed); `…@acme.inc.evil.com` and
   `…@sub.acme.inc` are rejected. Password 12 chars minimum, 72 **bytes** maximum.
 - A `role` field is a `400` (strict body), not a silently ignored escalation attempt.
@@ -235,22 +238,27 @@ performs one yet. The client must log in again.
 
 ### A8 `GET /users` — admin
 
-Query: paging, plus `role`, `is_active`, `search` (substring of email or name, ≤200 chars).
+Query: paging, plus `role`, `is_active`, `email` (exact, case-insensitive — how an admin finds the
+one person to promote), `search` (substring of email or name, ≤200 chars).
 `sort ∈ {created_at, email, full_name, role}`, default `created_at desc`.
 
-The admin assignment picker uses `GET /users?role=Engineer&is_active=true`.
+The admin assignment picker uses `GET /users?role=Engineer&is_active=true`. To promote someone, an
+admin looks them up with `GET /users?email=jane@acme.inc` — an empty page, not a 404, when nobody
+matches — then `PUT /users/{id}` with the new role.
 
 ### A9 `POST /users` — admin
 
 ```json
 { "email": "sam@acme.inc", "password": "…", "full_name": "Sam Lee",
-  "role": "Engineer", "specialty": "HVAC" }
+  "role": "Engineer", "specialty": "HVAC", "date_of_birth": "1990-05-05" }
 ```
 
 → `201 UserOut`, `Location: /api/auth/users/{id}`.
 - The only place a role can be chosen.
 - `specialty` is **required** when `role` is `Engineer` (creates the `EngineerProfile` in the same
   transaction) and **rejected** for other roles.
+- `occupation` is **required** when `role` is `Employee` and **rejected** for other roles.
+- `date_of_birth` is required for every role, same rule as registration.
 - Duplicate email → `409 conflict`. Unlike registration, admins are trusted and need to know.
 - **Decision D5:** the `@acme.inc` domain rule applies here too.
 
@@ -260,11 +268,15 @@ The admin assignment picker uses `GET /users?role=Engineer&is_active=true`.
 
 ### A11 `PUT /users/{user_id}` — admin
 
-Body: any of `full_name`, `role`, `is_active`, `specialty`.
+Body: any of `full_name`, `role`, `is_active`, `specialty`, `occupation`, `date_of_birth`.
 
 - Changing `role` or setting `is_active=false` bumps `sessions_valid_from` — the demotion is
   effective on the target's next request, not in 30 minutes.
 - Changing the role **to** Engineer requires `specialty` unless a profile already exists (`400`).
+- Changing the role **to** Employee requires `occupation` (`400`); changing it **away** from Employee
+  clears the occupation, so "an occupation exactly when Employee" holds for every row. An
+  `occupation` for any other role is `400`.
+- `date_of_birth` may be corrected, never into the future.
 - An admin may not demote or deactivate **themselves** → `409 conflict`. This guarantees at least
   one admin always remains able to undo mistakes.
 - Demoting an Engineer who is the assignee of any non-closed incident → `409 conflict`, with the count
