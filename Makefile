@@ -32,7 +32,10 @@ venv: ## Create .venv and install runtime + dev dependencies
 	test -s backend/$(SERVICE)/requirements.txt && $(PIP) install --quiet -r backend/$(SERVICE)/requirements.txt || true
 	@echo "venv ready: $(VENV)"
 
-serve: ## Run the service locally with uvicorn (:8000)
+# tools/devserver.py picks the service from this variable; without it,
+# `make serve SERVICE=incidents` would put incidents on the path but serve auth.
+serve: export ACME_SERVICE_NAME := $(SERVICE)
+serve: ## Run one service locally with uvicorn:  make serve [SERVICE=incidents] [PORT=8001]
 	$(VENV)/bin/uvicorn --factory tools.devserver:app --reload --port $(PORT)
 
 migrate: ## Apply migrations to the local database
@@ -63,7 +66,7 @@ lint: ## Ruff + bandit, matching what CI runs
 	$(VENV)/bin/ruff check backend tests
 	# Exclude only the VENDORED copies. '*/acme_core/*' would also match
 	# backend/_shared/acme_core and silently skip the real source.
-	$(VENV)/bin/bandit -q -r ./backend -x './backend/auth/acme_core'
+	$(VENV)/bin/bandit -q -r ./backend -x './backend/auth/acme_core,./backend/incidents/acme_core'
 
 audit: ## Report known vulnerabilities in pinned runtime dependencies
 	$(PIP) install --quiet pip-audit && $(VENV)/bin/pip-audit -r backend/$(SERVICE)/requirements.txt
