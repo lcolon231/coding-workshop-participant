@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import datetime as dt
 import uuid
-from typing import Annotated, ClassVar
+from typing import Annotated, ClassVar, Final
 
-from pydantic import EmailStr, Field, field_validator, model_validator
+from pydantic import AfterValidator, EmailStr, Field, field_validator, model_validator
 
 from acme_core.config import get_settings
 from acme_core.models.enums import Role
@@ -22,6 +22,36 @@ from acme_core.security.passwords import MAX_PASSWORD_BYTES, MIN_PASSWORD_LENGTH
 Password = Annotated[str, Field(min_length=MIN_PASSWORD_LENGTH, max_length=MAX_PASSWORD_BYTES)]
 FullName = Annotated[str, Field(min_length=1, max_length=200)]
 Specialty = Annotated[str, Field(min_length=1, max_length=100)]
+Occupation = Annotated[str, Field(min_length=1, max_length=100)]
+
+# A floor, not a policy: it catches a mistyped year (0985, 1066) that would
+# otherwise be stored as a real birth date.
+EARLIEST_BIRTH_DATE: Final[dt.date] = dt.date(1900, 1, 1)
+
+
+def _not_in_the_future(value: dt.date) -> dt.date:
+    """Refuse a birth date after today, or implausibly far in the past.
+
+    "Today" is the UTC date, the same clock every other timestamp in the
+    system uses. Today itself is accepted.
+
+    Args:
+        value: The submitted date of birth.
+
+    Returns:
+        The date, unchanged.
+
+    Raises:
+        ValueError: The date is after today or before EARLIEST_BIRTH_DATE.
+    """
+    if value > dt.datetime.now(dt.UTC).date():
+        raise ValueError("date_of_birth cannot be in the future")
+    if value < EARLIEST_BIRTH_DATE:
+        raise ValueError(f"date_of_birth cannot be before {EARLIEST_BIRTH_DATE.isoformat()}")
+    return value
+
+
+DateOfBirth = Annotated[dt.date, AfterValidator(_not_in_the_future)]
 
 
 def _require_company_domain(value: str) -> str:
@@ -78,6 +108,10 @@ class RegisterRequest(_CompanyEmail):
     email: EmailStr
     password: Password
     full_name: FullName
+    # Required because self-registration always creates an Employee, and an
+    # Employee always has an occupation.
+    occupation: Occupation
+    date_of_birth: DateOfBirth
 
 
 class RegisterAccepted(ResponseModel):
@@ -156,6 +190,8 @@ class UserOut(ResponseModel):
     email: str
     full_name: str
     role: Role
+    occupation: str | None
+    date_of_birth: dt.date | None
     is_active: bool
     created_at: dt.datetime
 
@@ -180,9 +216,18 @@ class UserFilters(PageParams):
 
     role: Role | None = None
     is_active: bool | None = None
+    # Exact match, for finding one person -- e.g. the user an admin is about
+    # to promote. `search` is the fuzzy alternative.
+    email: Annotated[str | None, Field(max_length=320)] = None
     search: Annotated[str | None, Field(max_length=200)] = None
     sort: Annotated[str, Field(pattern="^(created_at|email|full_name|role)$")] = "created_at"
     order: Order = "desc"
+
+    @field_validator("email")
+    @classmethod
+    def _normalise_email(cls, value: str | None) -> str | None:
+        """Match the stored form, which is lower-cased and trimmed."""
+        return value.strip().lower() if value is not None else None
 
 
 class AdminCreateUserRequest(_CompanyEmail):
@@ -196,30 +241,38 @@ class AdminCreateUserRequest(_CompanyEmail):
     password: Password
     full_name: FullName
     role: Role
+    date_of_birth: DateOfBirth
     specialty: Specialty | None = None
+    occupation: Occupation | None = None
 
     @model_validator(mode="after")
-    def _specialty_matches_role(self) -> AdminCreateUserRequest:
-        """An engineer needs a profile; nobody else may have one.
+    def _role_specific_fields(self) -> AdminCreateUserRequest:
+        """Each role-specific field is required for its role and refused for the rest.
 
-        Required for an Engineer because the profile is created in the same
-        transaction, and an engineer without one cannot be assigned by load.
-        Rejected for other roles rather than ignored, so a client mistake is
-        visible instead of silently dropped.
+        An Engineer needs a specialty because the profile is created in the
+        same transaction, and an engineer without one cannot be assigned by
+        load. An Employee needs an occupation. Either field on the wrong role
+        is rejected rather than ignored, so a client mistake is visible instead
+        of silently dropped.
         """
         if self.role is Role.ENGINEER and self.specialty is None:
             raise ValueError("specialty is required for an Engineer")
         if self.role is not Role.ENGINEER and self.specialty is not None:
             raise ValueError("specialty applies only to an Engineer")
+        if self.role is Role.EMPLOYEE and self.occupation is None:
+            raise ValueError("occupation is required for an Employee")
+        if self.role is not Role.EMPLOYEE and self.occupation is not None:
+            raise ValueError("occupation applies only to an Employee")
         return self
 
 
 class AdminUpdateUserRequest(UpdateModel):
     """Admin-only user update. Omitted fields are unchanged; none may be null.
 
-    `specialty` is needed only when changing a user *to* Engineer who has no
-    profile yet. Whether one exists is a database question, so the service
-    enforces that rule, not this schema.
+    `specialty` is needed when changing a user *to* Engineer who has no profile
+    yet, and `occupation` when changing a user *to* Employee who has none.
+    Both depend on the stored row, so the service enforces them, not this
+    schema.
     """
 
     CLEARABLE: ClassVar[frozenset[str]] = frozenset()
@@ -228,3 +281,5 @@ class AdminUpdateUserRequest(UpdateModel):
     role: Role | None = None
     is_active: bool | None = None
     specialty: Specialty | None = None
+    occupation: Occupation | None = None
+    date_of_birth: DateOfBirth | None = None

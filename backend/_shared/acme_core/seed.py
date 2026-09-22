@@ -19,6 +19,7 @@ Run locally with `make seed` (reads ACME_SEED_PASSWORD), in the cloud with
 
 from __future__ import annotations
 
+import datetime as dt
 import os
 import sys
 import uuid
@@ -45,7 +46,9 @@ class SeedUser:
     email: str
     full_name: str
     role: Role
+    date_of_birth: dt.date
     specialty: str | None = None
+    occupation: str | None = None
 
     @property
     def id(self) -> uuid.UUID:
@@ -54,11 +57,23 @@ class SeedUser:
 
 
 SEED_USERS: Final[tuple[SeedUser, ...]] = (
-    SeedUser("admin@acme.inc", "Ada Admin", Role.FACILITY_ADMIN),
-    SeedUser("hvac.engineer@acme.inc", "Hank Vance", Role.ENGINEER, "HVAC"),
-    SeedUser("it.engineer@acme.inc", "Ivy Tran", Role.ENGINEER, "Workplace Technology"),
-    SeedUser("employee@acme.inc", "Eve Employee", Role.EMPLOYEE),
-    SeedUser("second.employee@acme.inc", "Sam Second", Role.EMPLOYEE),
+    SeedUser("admin@acme.inc", "Ada Admin", Role.FACILITY_ADMIN, dt.date(1984, 3, 12)),
+    SeedUser(
+        "hvac.engineer@acme.inc", "Hank Vance", Role.ENGINEER, dt.date(1979, 7, 4),
+        specialty="HVAC",
+    ),
+    SeedUser(
+        "it.engineer@acme.inc", "Ivy Tran", Role.ENGINEER, dt.date(1991, 11, 23),
+        specialty="Workplace Technology",
+    ),
+    SeedUser(
+        "employee@acme.inc", "Eve Employee", Role.EMPLOYEE, dt.date(1995, 1, 30),
+        occupation="Financial Analyst",
+    ),
+    SeedUser(
+        "second.employee@acme.inc", "Sam Second", Role.EMPLOYEE, dt.date(1988, 9, 17),
+        occupation="Software Engineer",
+    ),
 )
 
 
@@ -90,6 +105,8 @@ def seed(session: Session, password: str) -> dict[str, int]:
             full_name=spec.full_name,
             password_hash=password_hash,
             role=spec.role,
+            occupation=spec.occupation,
+            date_of_birth=spec.date_of_birth,
         )
         if spec.specialty is not None:
             user.engineer_profile = EngineerProfile(specialty=spec.specialty)

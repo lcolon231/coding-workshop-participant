@@ -53,6 +53,8 @@ def list_users(session: Session, filters: UserFilters) -> tuple[list[User], int]
         statement = statement.where(User.role == filters.role)
     if filters.is_active is not None:
         statement = statement.where(User.is_active.is_(filters.is_active))
+    if filters.email is not None:
+        statement = statement.where(User.email == filters.email)
     if filters.search:
         pattern = like_pattern(filters.search.lower())
         statement = statement.where(

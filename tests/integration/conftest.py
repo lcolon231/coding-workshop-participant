@@ -18,6 +18,7 @@ Four hazards are handled deliberately; each is a comment where it applies:
 
 from __future__ import annotations
 
+import datetime as dt
 import os
 import uuid
 from collections.abc import Callable, Iterator
@@ -283,6 +284,9 @@ class UserFactory:
         from acme_core.security.passwords import hash_password
 
         self._count += 1
+        attrs.setdefault("date_of_birth", dt.date(1990, 1, 1))
+        if role is Role.EMPLOYEE:
+            attrs.setdefault("occupation", "Analyst")
         user = User(
             email=email or f"user{self._count}-{uuid.uuid4().hex[:6]}@acme.inc",
             full_name=full_name or f"User {self._count}",

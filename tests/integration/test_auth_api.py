@@ -48,6 +48,8 @@ class TestRegister:
             "email": "new.person@acme.inc",
             "password": "a-long-enough-passphrase",
             "full_name": "New Person",
+            "occupation": "Accountant",
+            "date_of_birth": "1992-04-01",
             **kw,
         }
         return client.post(f"{P}/register", json=body)
@@ -496,6 +498,8 @@ class TestCreateUser:
             "password": "a-long-enough-passphrase",
             "full_name": "Sam Lee",
             "role": "Employee",
+            "occupation": "Designer",
+            "date_of_birth": "1990-05-05",
             **kw,
         }
 
@@ -503,7 +507,9 @@ class TestCreateUser:
         self, auth_client: TestClient, admin_headers: dict[str, str], verify_session: Session
     ) -> None:
         resp = auth_client.post(
-            f"{P}/users", json=self._body(role="Engineer", specialty="HVAC"), headers=admin_headers
+            f"{P}/users",
+            json=self._body(role="Engineer", specialty="HVAC", occupation=None),
+            headers=admin_headers,
         )
         assert resp.status_code == 201
         assert resp.headers["Location"] == f"/api/auth/users/{resp.json()['id']}"
@@ -528,7 +534,7 @@ class TestCreateUser:
         self, auth_client: TestClient, admin_headers: dict[str, str]
     ) -> None:
         resp = auth_client.post(
-            f"{P}/users", json=self._body(role="Engineer"), headers=admin_headers
+            f"{P}/users", json=self._body(role="Engineer", occupation=None), headers=admin_headers
         )
         assert resp.status_code == 400
 
@@ -581,7 +587,9 @@ class TestUpdateUser:
         other_admin = make_user(Role.FACILITY_ADMIN)
         their_tokens = sign_in(other_admin.email)
         resp = auth_client.put(
-            f"{P}/users/{other_admin.id}", json={"role": "Employee"}, headers=admin_headers
+            f"{P}/users/{other_admin.id}",
+            json={"role": "Employee", "occupation": "Analyst"},
+            headers=admin_headers,
         )
         assert resp.status_code == 200
         assert auth_client.get(f"{P}/users", headers=bearer(their_tokens)).status_code == 401
@@ -842,6 +850,8 @@ class TestEdges:
                 "email": "racer@acme.inc",
                 "password": "a-long-enough-passphrase",
                 "full_name": "R",
+                "occupation": "Racer",
+                "date_of_birth": "1990-01-01",
             },
         )
         assert resp.status_code == 202
@@ -874,6 +884,8 @@ class TestEdges:
                 "password": "a-long-enough-passphrase",
                 "full_name": "R",
                 "role": "Employee",
+                "occupation": "Racer",
+                "date_of_birth": "1990-01-01",
             },
             headers=admin_headers,
         )
@@ -907,3 +919,192 @@ class TestEdges:
             f"{P}/users/{engineer.id}", json={"full_name": "New Name"}, headers=admin_headers
         )
         assert fresh(verify_session, engineer).engineer_profile.specialty == "HVAC"  # type: ignore[union-attr]
+
+
+# --------------------------------------------------------------------------- profile fields
+
+
+class TestProfileFields:
+    """Occupation (Employees only) and date of birth (everyone, never in the future)."""
+
+    def test_registration_stores_both(
+        self, auth_client: TestClient, verify_session: Session
+    ) -> None:
+        auth_client.post(
+            f"{P}/register",
+            json={
+                "email": "prof@acme.inc",
+                "password": "a-long-enough-passphrase",
+                "full_name": "Prof",
+                "occupation": "Accountant",
+                "date_of_birth": "1992-04-01",
+            },
+        )
+        user = verify_session.execute(
+            select(User).where(User.email == "prof@acme.inc")
+        ).scalar_one()
+        assert (user.occupation, user.date_of_birth) == ("Accountant", dt.date(1992, 4, 1))
+
+    def test_a_future_birth_date_is_a_field_error(self, auth_client: TestClient) -> None:
+        tomorrow = (dt.datetime.now(dt.UTC).date() + dt.timedelta(days=1)).isoformat()
+        resp = auth_client.post(
+            f"{P}/register",
+            json={
+                "email": "future@acme.inc",
+                "password": "a-long-enough-passphrase",
+                "full_name": "Future",
+                "occupation": "Time Traveller",
+                "date_of_birth": tomorrow,
+            },
+        )
+        assert resp.status_code == 400
+        assert resp.json()["details"][0]["field"] == "date_of_birth"
+        assert "future" in resp.json()["details"][0]["message"]
+
+    def test_me_shows_both(self, auth_client: TestClient, make_user: Any, sign_in: Any) -> None:
+        user = make_user(occupation="Nurse", date_of_birth=dt.date(1985, 6, 15))
+        body = auth_client.get(f"{P}/me", headers=bearer(sign_in(user.email))).json()
+        assert (body["occupation"], body["date_of_birth"]) == ("Nurse", "1985-06-15")
+
+    def test_promotion_clears_the_occupation(
+        self,
+        auth_client: TestClient,
+        make_user: Any,
+        admin_headers: dict[str, str],
+        verify_session: Session,
+    ) -> None:
+        """ "Occupation exactly when Employee" must survive a role change."""
+        user = make_user(occupation="Nurse")
+        resp = auth_client.put(
+            f"{P}/users/{user.id}",
+            json={"role": "Engineer", "specialty": "HVAC"},
+            headers=admin_headers,
+        )
+        assert resp.status_code == 200 and resp.json()["occupation"] is None
+        assert fresh(verify_session, user).occupation is None
+
+    def test_demotion_to_employee_needs_an_occupation(
+        self, auth_client: TestClient, make_user: Any, admin_headers: dict[str, str]
+    ) -> None:
+        other_admin = make_user(Role.FACILITY_ADMIN)
+        resp = auth_client.put(
+            f"{P}/users/{other_admin.id}", json={"role": "Employee"}, headers=admin_headers
+        )
+        assert resp.status_code == 400
+        assert resp.json()["details"][0]["field"] == "occupation"
+
+    def test_an_occupation_for_an_engineer_is_refused(
+        self, auth_client: TestClient, make_user: Any, admin_headers: dict[str, str]
+    ) -> None:
+        engineer = make_user(Role.ENGINEER)
+        resp = auth_client.put(
+            f"{P}/users/{engineer.id}", json={"occupation": "Nurse"}, headers=admin_headers
+        )
+        assert resp.status_code == 400
+
+    def test_an_employee_can_change_occupation(
+        self,
+        auth_client: TestClient,
+        make_user: Any,
+        admin_headers: dict[str, str],
+        verify_session: Session,
+    ) -> None:
+        user = make_user(occupation="Nurse")
+        auth_client.put(
+            f"{P}/users/{user.id}", json={"occupation": "Surgeon"}, headers=admin_headers
+        )
+        assert fresh(verify_session, user).occupation == "Surgeon"
+
+    def test_an_admin_can_correct_a_birth_date_but_not_into_the_future(
+        self,
+        auth_client: TestClient,
+        make_user: Any,
+        admin_headers: dict[str, str],
+        verify_session: Session,
+    ) -> None:
+        user = make_user()
+        ok = auth_client.put(
+            f"{P}/users/{user.id}", json={"date_of_birth": "1980-02-29"}, headers=admin_headers
+        )
+        assert ok.status_code == 200
+        assert fresh(verify_session, user).date_of_birth == dt.date(1980, 2, 29)
+        tomorrow = (dt.datetime.now(dt.UTC).date() + dt.timedelta(days=1)).isoformat()
+        bad = auth_client.put(
+            f"{P}/users/{user.id}", json={"date_of_birth": tomorrow}, headers=admin_headers
+        )
+        assert bad.status_code == 400
+
+    def test_admin_create_stores_both(
+        self, auth_client: TestClient, admin_headers: dict[str, str]
+    ) -> None:
+        resp = auth_client.post(
+            f"{P}/users",
+            json={
+                "email": "hire@acme.inc",
+                "password": "a-long-enough-passphrase",
+                "full_name": "Hire",
+                "role": "Employee",
+                "occupation": "Receptionist",
+                "date_of_birth": "2000-12-31",
+            },
+            headers=admin_headers,
+        )
+        assert resp.status_code == 201
+        assert (resp.json()["occupation"], resp.json()["date_of_birth"]) == (
+            "Receptionist",
+            "2000-12-31",
+        )
+
+
+class TestFindByEmail:
+    """How an admin locates the person they are about to promote."""
+
+    def test_finds_exactly_one_user(
+        self, auth_client: TestClient, make_user: Any, admin_headers: dict[str, str]
+    ) -> None:
+        target = make_user(email="jane.doe@acme.inc")
+        make_user(email="jane.doe.two@acme.inc")  # a substring match, which must not appear
+        body = auth_client.get(f"{P}/users?email=jane.doe@acme.inc", headers=admin_headers).json()
+        assert body["total"] == 1
+        assert body["items"][0]["id"] == str(target.id)
+
+    def test_is_case_insensitive(
+        self, auth_client: TestClient, make_user: Any, admin_headers: dict[str, str]
+    ) -> None:
+        make_user(email="jane.doe@acme.inc")
+        body = auth_client.get(f"{P}/users?email=Jane.Doe@ACME.inc", headers=admin_headers).json()
+        assert body["total"] == 1
+
+    def test_no_match_is_an_empty_page_not_a_404(
+        self, auth_client: TestClient, admin_headers: dict[str, str]
+    ) -> None:
+        resp = auth_client.get(f"{P}/users?email=nobody@acme.inc", headers=admin_headers)
+        assert resp.status_code == 200 and resp.json() == {
+            "items": [],
+            "total": 0,
+            "limit": 25,
+            "offset": 0,
+        }
+
+    def test_find_then_promote(
+        self,
+        auth_client: TestClient,
+        make_user: Any,
+        sign_in: Any,
+        admin_headers: dict[str, str],
+    ) -> None:
+        """The whole admin journey: look up by email, promote, and the change bites."""
+        make_user(email="rising.star@acme.inc", occupation="Technician")
+        their_tokens = sign_in("rising.star@acme.inc")
+        found = auth_client.get(
+            f"{P}/users?email=rising.star@acme.inc", headers=admin_headers
+        ).json()["items"][0]
+        promoted = auth_client.put(
+            f"{P}/users/{found['id']}",
+            json={"role": "Engineer", "specialty": "Electrical"},
+            headers=admin_headers,
+        )
+        assert promoted.json()["role"] == "Engineer"
+        assert auth_client.get(f"{P}/me", headers=bearer(their_tokens)).status_code == 401
+        me = auth_client.get(f"{P}/me", headers=bearer(sign_in("rising.star@acme.inc"))).json()
+        assert me["role"] == "Engineer" and me["engineer_profile"]["specialty"] == "Electrical"

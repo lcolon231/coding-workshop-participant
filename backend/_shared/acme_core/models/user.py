@@ -9,7 +9,7 @@ import datetime as dt
 import uuid
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, func
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Integer, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -40,6 +40,15 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         enum_type(Role), nullable=False, default=Role.EMPLOYEE
     )
 
+    # Only an Employee has one; the service clears it when the role changes
+    # away from Employee, so the rule "occupation iff Employee" holds for every
+    # row the API writes. Nullable in the database for the other roles.
+    occupation: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    # Required by the API for every new or edited user, and never in the
+    # future. Nullable in the database only because rows created before this
+    # column existed have no value to backfill -- inventing one would be a data
+    # lie. Tighten to NOT NULL once every existing row has been given a date.
+    date_of_birth: Mapped[Optional[dt.date]] = mapped_column(Date, nullable=True)
     # Soft delete. A hard delete would either orphan or cascade away the
     # incident history that references this user as reporter or assignee.
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)

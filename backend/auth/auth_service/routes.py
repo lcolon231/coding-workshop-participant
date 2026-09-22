@@ -51,6 +51,8 @@ def _me(user: User) -> MeOut:
         email=user.email,
         full_name=user.full_name,
         role=user.role,
+        occupation=user.occupation,
+        date_of_birth=user.date_of_birth,
         is_active=user.is_active,
         created_at=user.created_at,
         engineer_profile=EngineerProfileOut.model_validate(profile) if profile else None,

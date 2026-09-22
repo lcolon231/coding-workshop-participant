@@ -161,6 +161,8 @@ def register(session: Session, request: RegisterRequest) -> None:
                     full_name=request.full_name,
                     password_hash=password_hash,
                     role=Role.EMPLOYEE,
+                    occupation=request.occupation,
+                    date_of_birth=request.date_of_birth,
                 )
             )
     except IntegrityError:
@@ -329,6 +331,8 @@ def create_user(session: Session, request: AdminCreateUserRequest) -> User:
         full_name=request.full_name,
         password_hash=hash_password(request.password),
         role=request.role,
+        occupation=request.occupation,
+        date_of_birth=request.date_of_birth,
     )
     if request.role is Role.ENGINEER and request.specialty is not None:
         user.engineer_profile = EngineerProfile(specialty=request.specialty)
@@ -367,8 +371,9 @@ def update_user(
         NotFound: No such user.
         Conflict: A self-demotion, self-deactivation, or removing an engineer
             who still has open work.
-        ValidationFailed: Promoting to Engineer without a specialty, or giving
-            a specialty to someone who will not be an Engineer.
+        ValidationFailed: Moving to Engineer without a specialty or to
+            Employee without an occupation, or giving either field to a user
+            whose role will not use it.
     """
     user = repo.get_user_for_update(session, user_id)
     if user is None:
@@ -401,8 +406,12 @@ def update_user(
             details=[{"field": "specialty", "message": "Only an Engineer has a specialty."}],
         )
 
+    _apply_occupation(user, new_role, changes)
+
     if "full_name" in changes:
         user.full_name = changes["full_name"]
+    if "date_of_birth" in changes:
+        user.date_of_birth = changes["date_of_birth"]
     if "is_active" in changes:
         user.is_active = changes["is_active"]
     user.role = new_role
@@ -413,6 +422,34 @@ def update_user(
         revoke_all_sessions(session, user)
     session.flush()
     return user
+
+
+def _apply_occupation(user: User, new_role: Role, changes: dict[str, object]) -> None:
+    """Keep "an occupation exactly when the role is Employee" true.
+
+    Leaving Employee clears the occupation rather than keeping a stale value
+    on an Engineer or Admin; becoming an Employee requires one.
+
+    Raises:
+        ValidationFailed: An occupation is missing for an Employee, or given
+            for any other role.
+    """
+    occupation = changes.get("occupation")
+    if new_role is Role.EMPLOYEE:
+        if occupation is not None:
+            user.occupation = str(occupation)
+        elif user.role is not Role.EMPLOYEE or user.occupation is None:
+            raise ValidationFailed(
+                "An occupation is required for an Employee.",
+                details=[{"field": "occupation", "message": "This value is required."}],
+            )
+    elif occupation is not None:
+        raise ValidationFailed(
+            "An occupation applies only to an Employee.",
+            details=[{"field": "occupation", "message": "Only an Employee has an occupation."}],
+        )
+    else:
+        user.occupation = None
 
 
 def deactivate_user(session: Session, actor: Principal, user_id: uuid.UUID) -> None:

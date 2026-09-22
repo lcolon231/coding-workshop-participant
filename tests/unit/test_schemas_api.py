@@ -94,9 +94,7 @@ class TestUpdateModel:
         assert model.CLEARABLE <= set(model.model_fields)
 
     @pytest.mark.parametrize("model", update_models(), ids=lambda m: m.__name__)
-    def test_null_is_refused_on_every_non_clearable_field(
-        self, model: type[UpdateModel]
-    ) -> None:
+    def test_null_is_refused_on_every_non_clearable_field(self, model: type[UpdateModel]) -> None:
         """Otherwise a null reaches a NOT NULL column and surfaces as a 500."""
         for field in set(model.model_fields) - model.CLEARABLE:
             with pytest.raises(ValidationError) as exc:
@@ -132,8 +130,12 @@ class TestAdminUserSchemas:
             "password": VALID_PASSWORD,
             "full_name": "Sam Lee",
             "role": Role.EMPLOYEE,
+            "date_of_birth": "1990-05-05",
             **kw,
         }
+        # An Employee needs an occupation; give one unless the test is about it.
+        if payload["role"] is Role.EMPLOYEE:
+            payload.setdefault("occupation", "Designer")
         return schemas.AdminCreateUserRequest(**payload)  # type: ignore[arg-type]
 
     @pytest.mark.parametrize("email", ["sam@gmail.com", "sam@acme.inc.evil.com"])
@@ -173,9 +175,7 @@ class TestAdminUserSchemas:
 
 class TestPasswordChange:
     def test_accepts_a_valid_change(self) -> None:
-        req = schemas.ChangePasswordRequest(
-            current_password="old", new_password=VALID_PASSWORD
-        )
+        req = schemas.ChangePasswordRequest(current_password="old", new_password=VALID_PASSWORD)
         assert req.new_password == VALID_PASSWORD
 
     def test_the_new_password_meets_the_strength_rule(self) -> None:
@@ -204,9 +204,17 @@ class TestUserShapes:
 
     def test_me_profile_is_null_for_non_engineers(self) -> None:
         me = schemas.MeOut.model_validate(
-            {"id": uuid.uuid4(), "email": "jane@acme.inc", "full_name": "Jane Doe",
-             "role": Role.EMPLOYEE, "is_active": True, "created_at": NOW,
-             "engineer_profile": None}
+            {
+                "id": uuid.uuid4(),
+                "email": "jane@acme.inc",
+                "full_name": "Jane Doe",
+                "role": Role.EMPLOYEE,
+                "occupation": "Analyst",
+                "date_of_birth": "1990-01-01",
+                "is_active": True,
+                "created_at": NOW,
+                "engineer_profile": None,
+            }
         )
         assert me.engineer_profile is None
 
@@ -331,17 +339,27 @@ class TestIncidentShapes:
     def test_note_embeds_its_author(self) -> None:
         author = user(Role.ENGINEER, "Sam Lee")
         note = IncidentNote(
-            id=uuid.uuid4(), incident_id=uuid.uuid4(), author_id=author.id, author=author,
-            body="Ordered the part.", visibility=NoteVisibility.INTERNAL, created_at=NOW,
+            id=uuid.uuid4(),
+            incident_id=uuid.uuid4(),
+            author_id=author.id,
+            author=author,
+            body="Ordered the part.",
+            visibility=NoteVisibility.INTERNAL,
+            created_at=NOW,
         )
         assert schemas.NoteOut.model_validate(note).author.full_name == "Sam Lee"
 
     def test_history_embeds_its_actor(self) -> None:
         actor = user(Role.FACILITY_ADMIN, "Ada Admin")
         row = IncidentStatusHistory(
-            id=uuid.uuid4(), incident_id=uuid.uuid4(), from_status=None,
-            to_status=IncidentStatus.OPEN, actor_id=actor.id, actor=actor,
-            note=None, created_at=NOW,
+            id=uuid.uuid4(),
+            incident_id=uuid.uuid4(),
+            from_status=None,
+            to_status=IncidentStatus.OPEN,
+            actor_id=actor.id,
+            actor=actor,
+            note=None,
+            created_at=NOW,
         )
         assert schemas.StatusHistoryOut.model_validate(row).actor.role is Role.FACILITY_ADMIN
 
@@ -390,10 +408,17 @@ class TestEscalations:
     def test_out_embeds_requester_and_decider(self) -> None:
         requester, admin = user(), user(Role.FACILITY_ADMIN, "Ada Admin")
         row = EscalationRequest(
-            id=uuid.uuid4(), incident_id=uuid.uuid4(), requested_by_id=requester.id,
-            requested_by=requester, reason="Flooding", status=EscalationStatus.APPROVED,
-            decided_by_id=admin.id, decided_by=admin, decided_at=NOW,
-            decision_note=None, created_at=NOW,
+            id=uuid.uuid4(),
+            incident_id=uuid.uuid4(),
+            requested_by_id=requester.id,
+            requested_by=requester,
+            reason="Flooding",
+            status=EscalationStatus.APPROVED,
+            decided_by_id=admin.id,
+            decided_by=admin,
+            decided_at=NOW,
+            decision_note=None,
+            created_at=NOW,
         )
         out = schemas.EscalationOut.model_validate(row)
         assert out.decided_by is not None and out.decided_by.full_name == "Ada Admin"
@@ -443,8 +468,13 @@ class TestReportRange:
 
     def test_reports_echo_the_window_under_the_wire_names(self) -> None:
         report = schemas.VolumeReport.model_validate(
-            {"from": "2026-01-01", "to": "2026-01-31", "interval": "day",
-             "group_by": "status", "rows": []}
+            {
+                "from": "2026-01-01",
+                "to": "2026-01-31",
+                "interval": "day",
+                "group_by": "status",
+                "rows": [],
+            }
         )
         assert {"from", "to"} <= set(report.model_dump(by_alias=True))
 
@@ -457,3 +487,123 @@ class TestSlaTargets:
         order = [Priority.CRITICAL, Priority.HIGH, Priority.MEDIUM, Priority.LOW]
         targets = [SLA_TARGETS[p] for p in order]
         assert targets == sorted(targets)
+
+
+class TestDateOfBirth:
+    """Required for every user, and nobody is born after today."""
+
+    TODAY = dt.datetime.now(dt.UTC).date()
+
+    def _register(self, born: object) -> schemas.RegisterRequest:
+        return schemas.RegisterRequest(
+            email="new@acme.inc",
+            password=VALID_PASSWORD,
+            full_name="New",
+            occupation="Analyst",
+            date_of_birth=born,  # type: ignore[arg-type]
+        )
+
+    def test_today_is_accepted(self) -> None:
+        assert self._register(self.TODAY).date_of_birth == self.TODAY
+
+    def test_tomorrow_is_refused(self) -> None:
+        with pytest.raises(ValidationError, match="cannot be in the future") as exc:
+            self._register(self.TODAY + dt.timedelta(days=1))
+        assert error_fields(exc.value) == {"date_of_birth"}
+
+    def test_a_mistyped_ancient_year_is_refused(self) -> None:
+        with pytest.raises(ValidationError, match="cannot be before 1900-01-01"):
+            self._register("0985-06-01")
+
+    def test_the_earliest_permitted_date_is_accepted(self) -> None:
+        assert self._register("1900-01-01")
+
+    def test_it_is_required_at_registration(self) -> None:
+        with pytest.raises(ValidationError) as exc:
+            schemas.RegisterRequest(
+                email="new@acme.inc", password=VALID_PASSWORD, full_name="N", occupation="A"
+            )
+        assert "date_of_birth" in error_fields(exc.value)
+
+    @pytest.mark.parametrize("role", list(Role))
+    def test_it_is_required_for_every_role_on_admin_create(self, role: Role) -> None:
+        extra = {"specialty": "HVAC"} if role is Role.ENGINEER else {}
+        if role is Role.EMPLOYEE:
+            extra["occupation"] = "Analyst"
+        with pytest.raises(ValidationError) as exc:
+            schemas.AdminCreateUserRequest(
+                email="x@acme.inc", password=VALID_PASSWORD, full_name="X", role=role, **extra
+            )
+        assert "date_of_birth" in error_fields(exc.value)
+
+    def test_the_future_rule_applies_to_updates_too(self) -> None:
+        with pytest.raises(ValidationError, match="cannot be in the future"):
+            schemas.AdminUpdateUserRequest(date_of_birth=self.TODAY + dt.timedelta(days=1))
+
+    def test_an_update_may_correct_it(self) -> None:
+        req = schemas.AdminUpdateUserRequest(date_of_birth="1991-02-03")
+        assert req.changes() == {"date_of_birth": dt.date(1991, 2, 3)}
+
+
+class TestOccupation:
+    """Required for an Employee, refused for every other role."""
+
+    def test_registration_requires_it(self) -> None:
+        with pytest.raises(ValidationError) as exc:
+            schemas.RegisterRequest(
+                email="new@acme.inc",
+                password=VALID_PASSWORD,
+                full_name="N",
+                date_of_birth="1990-01-01",
+            )
+        assert "occupation" in error_fields(exc.value)
+
+    def test_admin_create_requires_it_for_an_employee(self) -> None:
+        with pytest.raises(ValidationError, match="occupation is required for an Employee"):
+            schemas.AdminCreateUserRequest(
+                email="x@acme.inc",
+                password=VALID_PASSWORD,
+                full_name="X",
+                role=Role.EMPLOYEE,
+                date_of_birth="1990-01-01",
+            )
+
+    @pytest.mark.parametrize("role", [Role.ENGINEER, Role.FACILITY_ADMIN])
+    def test_admin_create_refuses_it_for_other_roles(self, role: Role) -> None:
+        extra = {"specialty": "HVAC"} if role is Role.ENGINEER else {}
+        with pytest.raises(ValidationError, match="applies only to an Employee"):
+            schemas.AdminCreateUserRequest(
+                email="x@acme.inc",
+                password=VALID_PASSWORD,
+                full_name="X",
+                role=role,
+                date_of_birth="1990-01-01",
+                occupation="Analyst",
+                **extra,
+            )
+
+    def test_it_cannot_be_blank(self) -> None:
+        with pytest.raises(ValidationError):
+            schemas.RegisterRequest(
+                email="new@acme.inc",
+                password=VALID_PASSWORD,
+                full_name="N",
+                occupation="   ",
+                date_of_birth="1990-01-01",
+            )
+
+    def test_users_expose_both_fields(self) -> None:
+        assert {"occupation", "date_of_birth"} <= set(schemas.UserOut.model_fields)
+
+    def test_summaries_expose_neither(self) -> None:
+        """A birth date is personal data; summaries are shown to every viewer."""
+        assert not {"occupation", "date_of_birth"} & set(schemas.UserSummary.model_fields)
+
+
+class TestFindByEmail:
+    def test_the_email_filter_is_normalised(self) -> None:
+        """So an admin pasting `Jane@ACME.inc ` still finds jane@acme.inc."""
+        assert schemas.UserFilters(email="  Jane@ACME.inc ").email == "jane@acme.inc"
+
+    def test_it_is_optional(self) -> None:
+        assert schemas.UserFilters().email is None
