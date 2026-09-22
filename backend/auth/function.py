@@ -1,80 +1,61 @@
 """AWS Lambda entrypoint for the auth service.
 
-Commit 1: a throwaway smoke test. It exists to prove four things before nine
-commits of work depend on them:
+`infra/locals.tf:57` hardcodes the handler as `function.handler`, so both this
+module's name and the function's name are load-bearing.
 
-1. the Terraform zip builds and uploads;
-2. the vendored `acme_core` import resolves at /var/task;
-3. CloudFront's `/api/auth*` behavior actually routes to this function;
-4. what a trivial python3.13 function costs, as a memory baseline against the
-   hardcoded 128 MB in infra/lambda.tf:11.
-
-`infra/locals.tf:57` hardcodes the handler as `function.handler`, so both the
-module name and the function name are load-bearing. Replaced at commit 10 by
-the real dispatcher plus a lazily-constructed Mangum adapter.
+Every event is classified before anything heavy is imported. An HTTP request
+builds the ASGI stack on first use and reuses it while the environment stays
+warm; an admin command imports only what it runs, so `migrate` never loads
+FastAPI and the route graph alongside Alembic inside a 128 MB function (A2).
+Anything else is refused rather than handed to Mangum (S11).
 """
 
 from __future__ import annotations
 
-import json
-import os
 from typing import Any
 
-import acme_core
+from acme_core.lambda_entry import classify
+from acme_core.logging_config import get_logger
+
+_logger = get_logger(__name__)
+
+# Built on the first HTTP event, not at import: see the module docstring.
+_asgi: Any = None
 
 
-def _response(status: int, payload: dict[str, Any]) -> dict[str, Any]:
-    """Build a Lambda Function URL response.
-
-    Args:
-        status: HTTP status code.
-        payload: JSON-serialisable body.
-
-    Returns:
-        A response dict in the shape the Function URL runtime expects, with the
-        body as a JSON *string*.
-    """
-    return {
-        "statusCode": status,
-        "headers": {"Content-Type": "application/json"},
-        "body": json.dumps(payload),
-    }
-
-
-def handler(event: dict[str, Any] | None = None, context: Any = None) -> dict[str, Any]:
-    """Report liveness and deployment provenance.
-
-    Defaults on both parameters let this run as `python function.py`, matching
-    the convention in backend/_examples/python-service/function.py.
+def handler(event: Any = None, context: Any = None) -> Any:
+    """Dispatch one Lambda invocation.
 
     Args:
-        event: Lambda Function URL event, or None when run directly.
-        context: Lambda context object, or None when run directly.
+        event: Whatever the Lambda runtime delivered.
+        context: The Lambda context object.
 
     Returns:
-        A 200 response describing the running build.
+        A Function URL response for HTTP events, or the admin action's result.
+
+    Raises:
+        RuntimeError: The event is neither a Function URL request nor a
+            well-formed admin command. Failing loudly is the point: a silent
+            success on an unrecognised event is how a fail-open bug hides.
     """
-    path = ""
-    if isinstance(event, dict):
-        path = event.get("rawPath") or ""
+    decision = classify(event)
 
-    return _response(
-        200,
-        {
-            "service": "auth",
-            "status": "ok",
-            "stage": "commit-1-smoke-test",
-            # Proves the vendored copy imported, and says which one.
-            "acme_core_version": acme_core.__version__,
-            "build": acme_core.build_stamp(),
-            # Confirms CloudFront forwards the full path without stripping the
-            # /api/auth prefix (infra/cloudfront.tf sets no origin_path).
-            "seen_path": path,
-            "in_lambda": "AWS_LAMBDA_FUNCTION_NAME" in os.environ,
-            "memory_limit_mb": os.getenv("AWS_LAMBDA_FUNCTION_MEMORY_SIZE"),
-        },
-    )
+    if decision.is_admin and decision.action is not None:
+        from acme_core.admin_actions import run_admin_action
 
+        return run_admin_action(decision.action, decision.options)
 
-if __name__ == "__main__":
-    print(json.dumps(handler(), indent=2))  # noqa: T201
+    if not decision.is_http:
+        # The reason names the failed check, never the event, which for a
+        # malformed seed command could carry a password.
+        _logger.error("unrecognised_invocation", extra={"reason": decision.reason})
+        raise RuntimeError(f"unrecognised invocation: {decision.reason}")
+
+    global _asgi
+    if _asgi is None:
+        from mangum import Mangum
+
+        from auth_service.app import app
+
+        _asgi = Mangum(app, lifespan="off")
+    return _asgi(event, context)

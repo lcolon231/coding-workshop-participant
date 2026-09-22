@@ -1,19 +1,80 @@
-"""Request and response bodies for authentication."""
+"""Request and response bodies for authentication and user administration."""
 
 from __future__ import annotations
 
 import datetime as dt
 import uuid
-from typing import Annotated
+from typing import Annotated, ClassVar, Final
 
-from pydantic import EmailStr, Field, field_validator
+from pydantic import AfterValidator, EmailStr, Field, field_validator, model_validator
 
 from acme_core.config import get_settings
 from acme_core.models.enums import Role
-from acme_core.schemas.common import ResponseModel, StrictModel
+from acme_core.schemas.common import (
+    Order,
+    PageParams,
+    ResponseModel,
+    StrictModel,
+    UpdateModel,
+)
 from acme_core.security.passwords import MAX_PASSWORD_BYTES, MIN_PASSWORD_LENGTH
 
 Password = Annotated[str, Field(min_length=MIN_PASSWORD_LENGTH, max_length=MAX_PASSWORD_BYTES)]
+FullName = Annotated[str, Field(min_length=1, max_length=200)]
+Specialty = Annotated[str, Field(min_length=1, max_length=100)]
+Occupation = Annotated[str, Field(min_length=1, max_length=100)]
+
+# A floor, not a policy: it catches a mistyped year (0985, 1066) that would
+# otherwise be stored as a real birth date.
+EARLIEST_BIRTH_DATE: Final[dt.date] = dt.date(1900, 1, 1)
+
+
+def _not_in_the_future(value: dt.date) -> dt.date:
+    """Refuse a birth date after today, or implausibly far in the past.
+
+    "Today" is the UTC date, the same clock every other timestamp in the
+    system uses. Today itself is accepted.
+
+    Args:
+        value: The submitted date of birth.
+
+    Returns:
+        The date, unchanged.
+
+    Raises:
+        ValueError: The date is after today or before EARLIEST_BIRTH_DATE.
+    """
+    if value > dt.datetime.now(dt.UTC).date():
+        raise ValueError("date_of_birth cannot be in the future")
+    if value < EARLIEST_BIRTH_DATE:
+        raise ValueError(f"date_of_birth cannot be before {EARLIEST_BIRTH_DATE.isoformat()}")
+    return value
+
+
+DateOfBirth = Annotated[dt.date, AfterValidator(_not_in_the_future)]
+
+
+def _require_company_domain(value: str) -> str:
+    """Restrict an address to the company domain.
+
+    This is input validation, not authentication: nothing here proves the
+    address belongs to whoever typed it. Treating it as an authentication
+    boundary would be a mistake, and it is documented as such.
+
+    Args:
+        value: An already lower-cased, trimmed email address.
+
+    Returns:
+        The address, unchanged.
+
+    Raises:
+        ValueError: The domain is not exactly the signup domain.
+    """
+    domain = get_settings().signup_domain
+    # Compare the domain exactly, so `user@acme.inc.evil.com` is rejected.
+    if value.rsplit("@", 1)[-1] != domain:
+        raise ValueError(f"must be an @{domain} address")
+    return value
 
 
 class _EmailNormalising(StrictModel):
@@ -26,7 +87,17 @@ class _EmailNormalising(StrictModel):
         return value.strip().lower() if isinstance(value, str) else value
 
 
-class RegisterRequest(_EmailNormalising):
+class _CompanyEmail(_EmailNormalising):
+    """Mixin restricting `email` to the company domain, after normalising."""
+
+    @field_validator("email", check_fields=False)
+    @classmethod
+    def _company_domain(cls, value: str) -> str:
+        """Apply the shared domain rule."""
+        return _require_company_domain(value)
+
+
+class RegisterRequest(_CompanyEmail):
     """Self-registration.
 
     Note what is absent: there is no `role`. Self-registration always creates
@@ -36,22 +107,22 @@ class RegisterRequest(_EmailNormalising):
 
     email: EmailStr
     password: Password
-    full_name: Annotated[str, Field(min_length=1, max_length=200)]
+    full_name: FullName
+    # Required because self-registration always creates an Employee, and an
+    # Employee always has an occupation.
+    occupation: Occupation
+    date_of_birth: DateOfBirth
 
-    @field_validator("email")
-    @classmethod
-    def _company_domain(cls, value: str) -> str:
-        """Restrict self-registration to the company domain.
 
-        This is input validation, not authentication: nothing here proves the
-        registrant controls the address. Treating it as an authentication
-        boundary would be a mistake, and it is documented as such.
-        """
-        domain = get_settings().signup_domain
-        # Compare the domain exactly, so `user@acme.inc.evil.com` is rejected.
-        if value.rsplit("@", 1)[-1] != domain:
-            raise ValueError(f"must be an @{domain} address")
-        return value
+class RegisterAccepted(ResponseModel):
+    """The register response, identical whether or not the email was new.
+
+    A 202 carrying only a message: returning the created user would confirm
+    that an existing address was *not* re-created, which is the enumeration
+    the endpoint is designed not to answer.
+    """
+
+    message: str
 
 
 class LoginRequest(_EmailNormalising):
@@ -62,9 +133,28 @@ class LoginRequest(_EmailNormalising):
 
 
 class RefreshRequest(StrictModel):
-    """Exchange a refresh token for a new pair."""
+    """Exchange a refresh token for a new pair, or revoke it on logout."""
 
     refresh_token: Annotated[str, Field(min_length=1)]
+
+
+class ChangePasswordRequest(StrictModel):
+    """Change one's own password.
+
+    The current password is required even though the caller is authenticated:
+    an access token left on an unlocked screen must not be enough to take the
+    account over permanently.
+    """
+
+    current_password: Annotated[str, Field(min_length=1, max_length=MAX_PASSWORD_BYTES)]
+    new_password: Password
+
+    @model_validator(mode="after")
+    def _must_differ(self) -> ChangePasswordRequest:
+        """A no-op change would still revoke every session, to no purpose."""
+        if self.new_password == self.current_password:
+            raise ValueError("new_password must differ from current_password")
+        return self
 
 
 class TokenPair(ResponseModel):
@@ -74,6 +164,19 @@ class TokenPair(ResponseModel):
     refresh_token: str
     token_type: str = "bearer"
     expires_in: int = Field(description="Access token lifetime in seconds.")
+
+
+class UserSummary(ResponseModel):
+    """Enough of a user to render their name wherever they are referenced.
+
+    Embedded in incidents, notes, history and escalations because an employee
+    cannot call `/api/auth/users`, so a bare id would be unrenderable. Carries
+    no email: a reporter's address is not every viewer's business.
+    """
+
+    id: uuid.UUID
+    full_name: str
+    role: Role
 
 
 class UserOut(ResponseModel):
@@ -87,11 +190,47 @@ class UserOut(ResponseModel):
     email: str
     full_name: str
     role: Role
+    occupation: str | None
+    date_of_birth: dt.date | None
     is_active: bool
     created_at: dt.datetime
 
 
-class AdminCreateUserRequest(_EmailNormalising):
+class EngineerProfileOut(ResponseModel):
+    """An engineer's scheduling and skill data."""
+
+    user_id: uuid.UUID
+    specialty: str
+    max_concurrent_incidents: int
+    is_available: bool
+
+
+class MeOut(UserOut):
+    """The caller, as returned by `GET /api/auth/me`."""
+
+    engineer_profile: EngineerProfileOut | None = None
+
+
+class UserFilters(PageParams):
+    """Query parameters for the admin user list."""
+
+    role: Role | None = None
+    is_active: bool | None = None
+    # Exact match, for finding one person -- e.g. the user an admin is about
+    # to promote. `search` is the fuzzy alternative.
+    email: Annotated[str | None, Field(max_length=320)] = None
+    search: Annotated[str | None, Field(max_length=200)] = None
+    sort: Annotated[str, Field(pattern="^(created_at|email|full_name|role)$")] = "created_at"
+    order: Order = "desc"
+
+    @field_validator("email")
+    @classmethod
+    def _normalise_email(cls, value: str | None) -> str | None:
+        """Match the stored form, which is lower-cased and trimmed."""
+        return value.strip().lower() if value is not None else None
+
+
+class AdminCreateUserRequest(_CompanyEmail):
     """Admin-only user creation.
 
     The one place a role may be chosen, which is why it exists separately from
@@ -100,14 +239,47 @@ class AdminCreateUserRequest(_EmailNormalising):
 
     email: EmailStr
     password: Password
-    full_name: Annotated[str, Field(min_length=1, max_length=200)]
+    full_name: FullName
     role: Role
-    specialty: Annotated[str | None, Field(max_length=100)] = None
+    date_of_birth: DateOfBirth
+    specialty: Specialty | None = None
+    occupation: Occupation | None = None
+
+    @model_validator(mode="after")
+    def _role_specific_fields(self) -> AdminCreateUserRequest:
+        """Each role-specific field is required for its role and refused for the rest.
+
+        An Engineer needs a specialty because the profile is created in the
+        same transaction, and an engineer without one cannot be assigned by
+        load. An Employee needs an occupation. Either field on the wrong role
+        is rejected rather than ignored, so a client mistake is visible instead
+        of silently dropped.
+        """
+        if self.role is Role.ENGINEER and self.specialty is None:
+            raise ValueError("specialty is required for an Engineer")
+        if self.role is not Role.ENGINEER and self.specialty is not None:
+            raise ValueError("specialty applies only to an Engineer")
+        if self.role is Role.EMPLOYEE and self.occupation is None:
+            raise ValueError("occupation is required for an Employee")
+        if self.role is not Role.EMPLOYEE and self.occupation is not None:
+            raise ValueError("occupation applies only to an Employee")
+        return self
 
 
-class AdminUpdateUserRequest(StrictModel):
-    """Admin-only user update. Every field optional; omitted means unchanged."""
+class AdminUpdateUserRequest(UpdateModel):
+    """Admin-only user update. Omitted fields are unchanged; none may be null.
 
-    full_name: Annotated[str | None, Field(min_length=1, max_length=200)] = None
+    `specialty` is needed when changing a user *to* Engineer who has no profile
+    yet, and `occupation` when changing a user *to* Employee who has none.
+    Both depend on the stored row, so the service enforces them, not this
+    schema.
+    """
+
+    CLEARABLE: ClassVar[frozenset[str]] = frozenset()
+
+    full_name: FullName | None = None
     role: Role | None = None
     is_active: bool | None = None
+    specialty: Specialty | None = None
+    occupation: Occupation | None = None
+    date_of_birth: DateOfBirth | None = None

@@ -166,8 +166,8 @@ because `Config` is a ConfigParser. `env.py` takes its URL from `get_settings()`
 `refresh_token_reused` — both 401, very different UX. `details[]` is built from an explicit allowlist
 (S3). `request_id` is `context.aws_request_id` in Lambda and a uuid4 under uvicorn. Registered once
 in `create_app()`, so all three services share it with no per-service code. Codes: `validation_error`
-400 · `unauthenticated` / `token_expired` / `wrong_token_type` 401 + `WWW-Authenticate` · `forbidden`
-403 · `not_found` 404 · `conflict` / `refresh_token_reused` / `invalid_transition` 409 ·
+400 · `unauthenticated` / `token_expired` / `wrong_token_type` / `refresh_token_reused` 401 +
+`WWW-Authenticate` · `forbidden` 403 · `not_found` 404 · `conflict` / `invalid_transition` 409 ·
 `internal_error` 500 (message scrubbed, `request_id` kept).
 
 ### Dependencies — `backend/auth/requirements.txt`

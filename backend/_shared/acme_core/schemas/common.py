@@ -7,9 +7,9 @@ or `role` by including it in the body.
 
 from __future__ import annotations
 
-from typing import Annotated, Generic, TypeVar
+from typing import Annotated, Any, ClassVar, Generic, TypeVar
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
 T = TypeVar("T")
 
@@ -38,6 +38,10 @@ SERVER_CONTROLLED_FIELDS = frozenset(
 DEFAULT_PAGE_SIZE = 25
 MAX_PAGE_SIZE = 100
 
+# Sort direction. A literal allowlist like every sort key: ORDER BY cannot be
+# parameterised, so nothing client-supplied reaches it as free text.
+Order = Annotated[str, Field(pattern="^(asc|desc)$")]
+
 
 class StrictModel(BaseModel):
     """Base for every *request* body.
@@ -50,6 +54,47 @@ class StrictModel(BaseModel):
     """
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+
+class UpdateModel(StrictModel):
+    """Base for every partial-update body (`PUT` with PATCH semantics).
+
+    Three states per field, and they must stay distinguishable:
+
+    - omitted       -> unchanged
+    - explicit null -> cleared, but only for a field listed in `CLEARABLE`
+    - a value       -> set
+
+    Every field defaults to None so it can be omitted, which means a bare
+    `None` cannot tell "omitted" from "null". `changes()` reads
+    `model_fields_set` instead, and the validator below rejects an explicit
+    null on any field not declared clearable -- so `{"title": null}` is a 400,
+    not an attempt to write NULL into a NOT NULL column that surfaces as a 500.
+    The allowlist fails closed: a new field is non-clearable until someone
+    decides otherwise.
+    """
+
+    CLEARABLE: ClassVar[frozenset[str]] = frozenset()
+
+    @field_validator("*", mode="before")
+    @classmethod
+    def _reject_null_on_required(cls, value: Any, info: ValidationInfo) -> Any:
+        """Refuse an explicit null for a field that cannot be cleared.
+
+        Runs only for fields the client actually sent: defaults are not
+        validated, so an omitted field never reaches this.
+        """
+        if value is None and info.field_name not in cls.CLEARABLE:
+            raise ValueError("may not be null; omit the field to leave it unchanged")
+        return value
+
+    def changes(self) -> dict[str, Any]:
+        """Return only the fields the client sent, including explicit nulls.
+
+        Returns:
+            The field -> value pairs to apply. Omitted fields are absent.
+        """
+        return self.model_dump(exclude_unset=True)
 
 
 class ResponseModel(BaseModel):
@@ -70,6 +115,12 @@ class PageParams(StrictModel):
 
     limit: Annotated[int, Field(ge=1, le=MAX_PAGE_SIZE)] = DEFAULT_PAGE_SIZE
     offset: Annotated[int, Field(ge=0)] = 0
+
+
+class TimelineParams(PageParams):
+    """Paging for a record of events, which reads oldest first by default."""
+
+    order: Order = "asc"
 
 
 class Page(ResponseModel, Generic[T]):

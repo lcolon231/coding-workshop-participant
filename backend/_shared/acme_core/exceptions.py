@@ -112,11 +112,13 @@ class Conflict(AppError):
 class RefreshTokenReused(AppError):
     """A rotated refresh token was presented again.
 
-    Treated as theft: the whole token family is revoked.
+    Treated as theft: the whole token family is revoked. A 401 rather than a
+    409 because the client's only correct response is to sign in again, and
+    its refresh interceptor already does exactly that on any 401 from /refresh.
     """
 
     code = "refresh_token_reused"
-    status = 409
+    status = 401
     default_message = "Refresh token has already been used; the session was revoked."
 
 

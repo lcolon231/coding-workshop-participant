@@ -18,10 +18,14 @@ Four hazards are handled deliberately; each is a comment where it applies:
 
 from __future__ import annotations
 
+import datetime as dt
 import os
-from collections.abc import Iterator
+import uuid
+from collections.abc import Callable, Iterator
+from typing import Any
 
 import pytest
+from fastapi.testclient import TestClient
 from sqlalchemy import Connection, create_engine, text
 from sqlalchemy.engine import Engine, make_url
 from sqlalchemy.orm import Session
@@ -29,6 +33,8 @@ from sqlalchemy.orm import Session
 from acme_core.config import get_settings
 from acme_core.db import engine as engine_module
 from acme_core.db.migrate import upgrade_head
+from acme_core.models.enums import Role
+from acme_core.models.user import EngineerProfile, User
 
 pytestmark = pytest.mark.integration
 
@@ -193,3 +199,125 @@ def verify_session(connection: Connection) -> Iterator[Session]:
 def database_name(database_url: str) -> str:
     """The throwaway database's name, for tests that assert on isolation."""
     return make_url(database_url).database or ""
+
+
+# --------------------------------------------------------------------------- API clients
+
+
+@pytest.fixture(autouse=True)
+def _cheap_bcrypt(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Hash at bcrypt's minimum cost.
+
+    Cost 12 is ~0.3 s per hash; the API suites create dozens of users. Only the
+    cost factor changes -- the code path, the salt and the verification are the
+    real ones, and verify_password reads the cost from the stored hash.
+    """
+    from acme_core.security import passwords
+
+    monkeypatch.setattr(passwords, "_ROUNDS", 4)
+
+
+@pytest.fixture(autouse=True)
+def _fresh_jwt_secret() -> Iterator[None]:
+    """Forget the cached signing key around each test.
+
+    The key row lives inside the per-test transaction and is rolled back with
+    it; a key cached from an earlier test would sign tokens no row backs.
+    """
+    from acme_core.security.secret import reset_cache
+
+    reset_cache()
+    yield
+    reset_cache()
+
+
+def build_client(db_session: Session, service: str, routers: list[Any]) -> TestClient:
+    """A TestClient for one service, running every request in the test transaction.
+
+    `get_db` is overridden to yield `db_session` with the same commit/rollback
+    semantics as production. Inside a savepoint-joined session a commit only
+    releases a savepoint, so nothing outlives the test.
+    """
+    from acme_core.api import create_app
+    from acme_core.db.engine import get_db
+
+    app = create_app(service, routers, configure_logs=False)
+
+    def _override() -> Iterator[Session]:
+        try:
+            yield db_session
+            db_session.commit()
+        except Exception:
+            db_session.rollback()
+            raise
+
+    app.dependency_overrides[get_db] = _override
+    return TestClient(app, raise_server_exceptions=False)
+
+
+@pytest.fixture
+def auth_client(db_session: Session) -> TestClient:
+    """The auth service, wired to the test transaction."""
+    from auth_service.routes import router
+
+    return build_client(db_session, "auth", [router])
+
+
+class UserFactory:
+    """Create committed users, with a known password, for API tests."""
+
+    password = "correct-horse-battery-staple"
+
+    def __init__(self, session: Session) -> None:
+        self._session = session
+        self._count = 0
+
+    def __call__(
+        self,
+        role: Role = Role.EMPLOYEE,
+        *,
+        email: str | None = None,
+        full_name: str | None = None,
+        specialty: str | None = None,
+        **attrs: Any,
+    ) -> User:
+        from acme_core.security.passwords import hash_password
+
+        self._count += 1
+        attrs.setdefault("date_of_birth", dt.date(1990, 1, 1))
+        if role is Role.EMPLOYEE:
+            attrs.setdefault("occupation", "Analyst")
+        user = User(
+            email=email or f"user{self._count}-{uuid.uuid4().hex[:6]}@acme.inc",
+            full_name=full_name or f"User {self._count}",
+            password_hash=hash_password(self.password),
+            role=role,
+            **attrs,
+        )
+        if role is Role.ENGINEER:
+            user.engineer_profile = EngineerProfile(specialty=specialty or "General")
+        self._session.add(user)
+        # Committed, not flushed: a request that fails rolls back to the last
+        # savepoint, and would take uncommitted fixture rows with it (hazard 2).
+        self._session.commit()
+        return user
+
+
+@pytest.fixture
+def make_user(db_session: Session) -> UserFactory:
+    return UserFactory(db_session)
+
+
+SignIn = Callable[..., dict[str, Any]]
+
+
+@pytest.fixture
+def sign_in(auth_client: TestClient) -> SignIn:
+    """Sign in through the real login endpoint and return the token pair."""
+
+    def _sign_in(email: str, password: str = UserFactory.password) -> dict[str, Any]:
+        resp = auth_client.post("/api/auth/login", json={"email": email, "password": password})
+        assert resp.status_code == 200, resp.text
+        return resp.json()
+
+    return _sign_in

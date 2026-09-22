@@ -2,8 +2,6 @@
 # build_in_docker = false, so these resolve against the deploy host's Python.
 # That host is the VDI (linux-x86_64, CPython 3.13), an exact match for the
 # python3.13 runtime in infra/locals.tf:56, so manylinux wheels apply cleanly.
-#
-# Added incrementally as each commit needs them; the full set lands at commit 10.
 
 SQLAlchemy==2.0.54
 # The repo example pins psycopg[binary]==3.2.3. Taking a current patch release
@@ -35,3 +33,6 @@ PyJWT==2.11.0
 # Required by Pydantic's EmailStr. Pinned explicitly rather than relying on the
 # pydantic[email] extra, so the deploy-time install resolves the same version.
 email-validator==2.3.0
+
+# ASGI -> Lambda adapter. Imported lazily in function.py, only for HTTP events.
+mangum==0.22.0

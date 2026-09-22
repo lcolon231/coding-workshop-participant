@@ -25,6 +25,8 @@ from acme_core.schemas.common import (
 pytestmark = pytest.mark.unit
 
 VALID_PASSWORD = "correct-horse-battery"
+# The fields every registration now carries.
+PROFILE = {"occupation": "Analyst", "date_of_birth": "1990-01-01"}
 
 
 def request_models() -> list[type[StrictModel]]:
@@ -63,9 +65,12 @@ class TestMassAssignment:
         # optional field on it.
         "AdminCreateUserRequest": {"role"},
         "AdminUpdateUserRequest": {"role", "is_active"},
-        # A building being in service is a domain attribute an admin sets,
-        # not a security flag like users.is_active.
+        # Whether a building, seat or category is in service is a domain
+        # attribute an admin sets, not a security flag like users.is_active.
+        # All three endpoints are admin-only.
         "BuildingUpdate": {"is_active"},
+        "SeatUpdate": {"is_active"},
+        "CategoryUpdate": {"is_active"},
     }
 
     @pytest.mark.parametrize("model", request_models(), ids=lambda m: m.__name__)
@@ -113,14 +118,14 @@ class TestMassAssignment:
 class TestRegistration:
     def test_accepts_a_company_address(self) -> None:
         req = schemas.RegisterRequest(
-            email="someone@acme.inc", password=VALID_PASSWORD, full_name="Someone"
+            email="someone@acme.inc", password=VALID_PASSWORD, full_name="Someone", **PROFILE
         )
         assert req.email == "someone@acme.inc"
 
     def test_lowercases_and_trims(self) -> None:
         """So the unique index is effectively case-insensitive."""
         req = schemas.RegisterRequest(
-            email="  Someone@ACME.INC  ", password=VALID_PASSWORD, full_name="S"
+            email="  Someone@ACME.INC  ", password=VALID_PASSWORD, full_name="S", **PROFILE
         )
         assert req.email == "someone@acme.inc"
 
@@ -137,7 +142,7 @@ class TestRegistration:
         """The suffix cases matter: a naive endswith check accepts the middle two."""
         with pytest.raises(ValidationError):
             schemas.RegisterRequest(
-                email=email, password=VALID_PASSWORD, full_name="S"
+                email=email, password=VALID_PASSWORD, full_name="S", **PROFILE
             )
 
     def test_has_no_role_field_at_all(self) -> None:
@@ -149,18 +154,18 @@ class TestRegistration:
         with pytest.raises(ValidationError) as exc:
             schemas.RegisterRequest(
                 email="s@acme.inc", password=VALID_PASSWORD,
-                full_name="S", role="Facility Admin",
+                full_name="S", **PROFILE, role="Facility Admin",
             )
         assert exc.value.errors()[0]["type"] == "extra_forbidden"
 
     def test_rejects_a_short_password(self) -> None:
         with pytest.raises(ValidationError):
-            schemas.RegisterRequest(email="s@acme.inc", password="short", full_name="S")
+            schemas.RegisterRequest(email="s@acme.inc", password="short", full_name="S", **PROFILE)
 
     def test_rejects_an_empty_name(self) -> None:
         with pytest.raises(ValidationError):
             schemas.RegisterRequest(
-                email="s@acme.inc", password=VALID_PASSWORD, full_name="   "
+                email="s@acme.inc", password=VALID_PASSWORD, full_name="   ", **PROFILE
             )
 
 
