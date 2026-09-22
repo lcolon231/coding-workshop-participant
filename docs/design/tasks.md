@@ -2,21 +2,25 @@
 
 Every task required to complete the project, not just the current vertical slice.
 Derived from the brief, the rubric in [`../full-stack.md`](../full-stack.md), and the findings in
-[`reviews.md`](reviews.md). Design rationale lives in [`plan.md`](plan.md); this file is the backlog.
+[`reviews.md`](reviews.md). Design rationale lives in [`plan.md`](plan.md); the HTTP contract every endpoint
+task implements is [`api.md`](api.md); this file is the backlog.
+
+Task numbers are stable identifiers, not an order: tasks added later take the next free number and
+are placed in the phase where they belong.
 
 **Status:** `[x]` done · `[~]` in progress · `[ ]` not started · `[!]` blocked or needs a decision
 
 | Phase | Scope | Done |
 |---|---|---|
 | 0 | Tooling foundation | 5 / 5 |
-| 1 | `acme_core` shared kernel | 29 / 29 |
-| 2 | `auth` service | 0 / 14 |
+| 1 | `acme_core` shared kernel | 29 / 30 |
+| 2 | `auth` service | 0 / 15 |
 | 3 | `incidents` service | 0 / 16 |
 | 4 | `facilities` service | 0 / 10 |
 | 5 | Frontend | 0 / 24 |
 | 6 | Cloud, CI and operations | 0 / 12 |
 | 7 | Documentation and handover | 0 / 7 |
-| | **Total** | **34 / 117** |
+| | **Total** | **34 / 119** |
 
 ---
 
@@ -28,7 +32,7 @@ Derived from the brief, the rubric in [`../full-stack.md`](../full-stack.md), an
 - [x] **T4** `Makefile` with 16 targets; `deploy` depends on `sync` + `verify-sync`.
 - [x] **T5** `backend/auth` stub, `.gitignore`, `pyrightconfig.json` excluding vendored copies.
 
-## Phase 1 — `acme_core` shared kernel ✅
+## Phase 1 — `acme_core` shared kernel
 
 - [x] **T6** `config.py` — `Settings`, single `in_lambda()` discriminator, URL builder, password masking.
 - [x] **T7** `db/engine.py` — locked lazy engine, `pool_size=1`, `pre_ping`, `get_db()`, `dispose_engine()`.
@@ -59,6 +63,7 @@ Derived from the brief, the rubric in [`../full-stack.md`](../full-stack.md), an
 - [x] **T32** `schemas/` — `StrictModel` (`extra="forbid"`), auth, facility, incident schemas; `Page[T]` for pagination.
 - [x] **T33** Schema tests — `@acme.inc` gate incl. `…@acme.inc.evil.com`, case, whitespace; `role` in body; **no request schema contains a server-controlled field**.
 - [x] **T34** `lambda_entry.py` — pure `classify(event)`; positive `source` marker, no HTTP keys, allowlisted action, fail closed. *(76 tests, 100%)*
+- [ ] **T118** Schema changes from [`api.md` §6](api.md#6-schema-changes-this-design-needs) — **before T35**. `UserSummary` embedded as `reporter`/`assignee`/`author`/`actor` (loaded with `selectinload`, no N+1); `MeOut`, `ChangePasswordRequest`, `UserFilters`; `AdminCreateUserRequest` gets the `@acme.inc` check and `specialty` required iff Engineer; `AdminUpdateUserRequest` gets `specialty`; facility `*Update` schemas; engineer-profile, escalation (`decision`, never `status`), workflow, detail and report schemas; every `*Update` rejects explicit `null` on required fields.
 
 ## Phase 2 — `auth` service
 
@@ -68,10 +73,11 @@ Derived from the brief, the rubric in [`../full-stack.md`](../full-stack.md), an
 - [ ] **T38** `auth_service/dependencies.py` — `current_user` (role and `is_active` read **from the DB row**, not the claim), `require_admin`, pagination params.
 - [ ] **T39** `POST /register` — `@acme.inc` gate, always Employee, identical response whether or not the email exists.
 - [ ] **T40** `POST /login` — constant-time against a dummy hash; account lockout (`failed_login_count`, `locked_until`); **never** IP-based.
-- [ ] **T41** `POST /refresh` — rotation, hashed storage, reuse detection revoking the family.
+- [ ] **T41** `POST /refresh` — rotation, hashed storage, reuse detection revoking the family (`401 refresh_token_reused`).
 - [ ] **T42** `GET /me` — rejects a refresh token with `wrong_token_type`.
 - [ ] **T43** `POST /logout` and logout-all bumping `sessions_valid_from`.
 - [ ] **T44** `/users` admin CRUD — Engineer/Admin creation with `EngineerProfile`, soft delete, 204, sort allowlist, pagination.
+- [ ] **T119** `POST /me/password` — verify current password, bump `sessions_valid_from`, revoke refresh tokens, 204 *(api.md A7)*.
 - [ ] **T45** `admin_actions.py` — `migrate` / `seed` / `db-current`; `seed` requires `confirm == APP_ID`.
 - [ ] **T46** `seed.py` — idempotent `uuid5` get-or-create, password **from payload**, strictly additive, histories replayed through `validate_transition`.
 - [ ] **T47** Integration tests — register, login, refresh, me, admin users, `test_route_contract`, `test_error_envelope`, `test_seed`, `test_readyz_migrations`.
@@ -92,7 +98,7 @@ Derived from the brief, the rubric in [`../full-stack.md`](../full-stack.md), an
 - [ ] **T59** Reporting endpoints — SLA and volume aggregates over the four stamped timestamps (`GROUP BY`, not window functions).
 - [ ] **T60** Integration tests for every endpoint above, both roles, both scope outcomes.
 - [ ] **T61** `test_scoping_db.py` — real rows, all three roles, the 404/200 pair on the **same** id.
-- [ ] **T62** Transition integration tests — each legal edge end to end, plus history rows and stamp values.
+- [ ] **T62** Transition integration tests — each legal edge end to end, plus history rows and stamp values. Includes the full **admin-triage journey**: employee reports → admin assigns while Open → the engineer (who could not see it before) now can, and starts work *(api.md §4)*.
 - [ ] **T63** Filter/pagination tests incl. sort allowlist rejection.
 - [ ] **T64** Deploy and smoke-test the service.
 
@@ -105,7 +111,7 @@ Derived from the brief, the rubric in [`../full-stack.md`](../full-stack.md), an
 - [ ] **T69** Categories CRUD incl. sub-categories.
 - [ ] **T70** Engineer profiles CRUD — admin only.
 - [ ] **T71** Nested listings (`/buildings/{id}/floors`, `/floors/{id}/seats`).
-- [ ] **T72** Referential-integrity handling — deleting a building with floors is 409, not 500.
+- [ ] **T72** Referential-integrity handling — deleting a building with floors is 409, not 500. The FKs are `ON DELETE CASCADE`, so the service checks for children **before** deleting; tests assert the floors and seats **still exist** after the rejected delete, not only the status code.
 - [ ] **T73** Integration tests for all of the above.
 - [ ] **T74** Deploy and smoke-test.
 
