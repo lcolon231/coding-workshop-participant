@@ -14,13 +14,13 @@ are placed in the phase where they belong.
 |---|---|---|
 | 0 | Tooling foundation | 5 / 5 |
 | 1 | `acme_core` shared kernel | 30 / 30 |
-| 2 | `auth` service | 0 / 15 |
+| 2 | `auth` service | 13 / 15 |
 | 3 | `incidents` service | 0 / 16 |
 | 4 | `facilities` service | 0 / 10 |
 | 5 | Frontend | 0 / 24 |
 | 6 | Cloud, CI and operations | 0 / 12 |
 | 7 | Documentation and handover | 0 / 7 |
-| | **Total** | **35 / 119** |
+| | **Total** | **48 / 119** |
 
 ---
 
@@ -67,20 +67,20 @@ are placed in the phase where they belong.
 
 ## Phase 2 — `auth` service
 
-- [ ] **T35** `requirements.txt` full pinned set + `function.py` with **lazily** constructed Mangum.
-- [ ] **T36** `auth_service/repository.py` — all user/token queries; no `session.get()` on children; no bare `update()`/`delete()`.
-- [ ] **T37** `auth_service/service.py` — register, authenticate, rotate refresh, admin user CRUD.
-- [ ] **T38** `auth_service/dependencies.py` — `current_user` (role and `is_active` read **from the DB row**, not the claim), `require_admin`, pagination params.
-- [ ] **T39** `POST /register` — `@acme.inc` gate, always Employee, identical response whether or not the email exists.
-- [ ] **T40** `POST /login` — constant-time against a dummy hash; account lockout (`failed_login_count`, `locked_until`); **never** IP-based.
-- [ ] **T41** `POST /refresh` — rotation, hashed storage, reuse detection revoking the family (`401 refresh_token_reused`).
-- [ ] **T42** `GET /me` — rejects a refresh token with `wrong_token_type`.
-- [ ] **T43** `POST /logout` and logout-all bumping `sessions_valid_from`.
-- [ ] **T44** `/users` admin CRUD — Engineer/Admin creation with `EngineerProfile`, soft delete, 204, sort allowlist, pagination.
-- [ ] **T119** `POST /me/password` — verify current password, bump `sessions_valid_from`, revoke refresh tokens, 204 *(api.md A7)*.
-- [ ] **T45** `admin_actions.py` — `migrate` / `seed` / `db-current`; `seed` requires `confirm == APP_ID`.
-- [ ] **T46** `seed.py` — idempotent `uuid5` get-or-create, password **from payload**, strictly additive, histories replayed through `validate_transition`.
-- [ ] **T47** Integration tests — register, login, refresh, me, admin users, `test_route_contract`, `test_error_envelope`, `test_seed`, `test_readyz_migrations`.
+- [x] **T35** `requirements.txt` full pinned set + `function.py` with **lazily** constructed Mangum. *(`function.py` classifies first; Mangum built on first HTTP event)*
+- [x] **T36** `auth_service/repository.py` — all user/token queries; no `session.get()` on children; no bare `update()`/`delete()`.
+- [x] **T37** `auth_service/service.py` — register, authenticate, rotate refresh, admin user CRUD.
+- [x] **T38** `auth_service/dependencies.py` — `current_user` (role and `is_active` read **from the DB row**, not the claim), `require_admin`, pagination params. *(moved to `acme_core/dependencies.py`: all three services authenticate the same way)*
+- [x] **T39** `POST /register` — `@acme.inc` gate, always Employee, identical response whether or not the email exists.
+- [x] **T40** `POST /login` — constant-time against a dummy hash; account lockout (`failed_login_count`, `locked_until`); **never** IP-based.
+- [x] **T41** `POST /refresh` — rotation, hashed storage, reuse detection revoking the family (`401 refresh_token_reused`).
+- [x] **T42** `GET /me` — rejects a refresh token with `wrong_token_type`.
+- [x] **T43** `POST /logout` and logout-all bumping `sessions_valid_from`.
+- [x] **T44** `/users` admin CRUD — Engineer/Admin creation with `EngineerProfile`, soft delete, 204, sort allowlist, pagination.
+- [x] **T119** `POST /me/password` — verify current password, bump `sessions_valid_from`, revoke refresh tokens, 204 *(api.md A7)*.
+- [x] **T45** `admin_actions.py` — `migrate` / `seed` / `db-current`; `seed` requires `confirm == APP_ID`.
+- [~] **T46** `seed.py` — idempotent `uuid5` get-or-create, password **from payload**, strictly additive, histories replayed through `validate_transition`. *(users done; facilities, categories and incident histories land with their services)*
+- [x] **T47** Integration tests — register, login, refresh, me, admin users, `test_route_contract`, `test_error_envelope`, `test_seed`, `test_readyz_migrations`. *(79 API + 11 seed tests; route contract driven from the OpenAPI schema)*
 - [ ] **T48** `tests/e2e/test_auth_journey.py` — real uvicorn, real commits across connections.
 
 ## Phase 3 — `incidents` service

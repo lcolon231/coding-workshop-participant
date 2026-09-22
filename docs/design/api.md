@@ -205,9 +205,9 @@ Only a hash of each refresh token is stored.
 
 | Case | Response |
 |---|---|
-| Unknown, expired, revoked-by-logout, or user inactive | `401 unauthenticated` |
+| Unknown, expired, or user inactive | `401 unauthenticated` |
 | An access token was sent | `401 wrong_token_type` (or a stolen 30-min token becomes a 7-day one) |
-| A **previously rotated** token is replayed | Entire family revoked → `401 refresh_token_reused` |
+| Any **revoked** token is presented — rotated, or retired by logout | Family revoked → `401 refresh_token_reused`. A logged-out token is indistinguishable from a stolen one without a revocation-reason column; both end in sign-in, so the client needs no second rule |
 | Issued before `sessions_valid_from` | `401 unauthenticated` |
 
 ### A4 `POST /logout`
