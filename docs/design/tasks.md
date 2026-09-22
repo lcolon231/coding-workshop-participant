@@ -9,14 +9,14 @@ Derived from the brief, the rubric in [`../full-stack.md`](../full-stack.md), an
 | Phase | Scope | Done |
 |---|---|---|
 | 0 | Tooling foundation | 5 / 5 |
-| 1 | `acme_core` shared kernel | 4 / 29 |
+| 1 | `acme_core` shared kernel | 8 / 29 |
 | 2 | `auth` service | 0 / 14 |
 | 3 | `incidents` service | 0 / 16 |
 | 4 | `facilities` service | 0 / 10 |
 | 5 | Frontend | 0 / 24 |
 | 6 | Cloud, CI and operations | 0 / 12 |
 | 7 | Documentation and handover | 0 / 7 |
-| | **Total** | **9 / 117** |
+| | **Total** | **13 / 117** |
 
 ---
 
@@ -34,17 +34,17 @@ Derived from the brief, the rubric in [`../full-stack.md`](../full-stack.md), an
 - [x] **T7** `db/engine.py` — locked lazy engine, `pool_size=1`, `pre_ping`, `get_db()`, `dispose_engine()`.
 - [x] **T8** `db/base.py` — `DeclarativeBase` with naming convention, UUID and timestamp mixins.
 - [x] **T9** Tests for T6–T8 + the no-I/O guard fixture. *(44 tests, 98.5%)*
-- [ ] **T10** `errors.py` — `AppError` hierarchy, flat `{error, message, details, request_id}` envelope, code→status table, FastAPI handlers. `details[]` built from an explicit allowlist, never by spreading `exc.errors()`.
-- [ ] **T11** `logging_config.py` — JSON logs, `request_id` ContextVar, denylist for `password`/`authorization`/`*_token`.
-- [ ] **T12** `api.py` — `create_app(service)`; routes at `/api/<service>`; `docs_url`/`openapi_url` under the prefix; `/healthz` (must build **no** engine) and `/readyz`; **no** `CORSMiddleware`.
-- [ ] **T13** Tests: error envelope shape, 422→400 override, `WWW-Authenticate` on 401s, `request_id` isolation, no secret ever logged, `/healthz` engine-free.
+- [x] **T10** `errors.py` — `AppError` hierarchy, flat `{error, message, details, request_id}` envelope, code→status table, FastAPI handlers. `details[]` built from an explicit allowlist, never by spreading `exc.errors()`.
+- [x] **T11** `logging_config.py` — JSON logs, `request_id` ContextVar, denylist for `password`/`authorization`/`*_token`.
+- [x] **T12** `api.py` — `create_app(service)`; routes at `/api/<service>`; `docs_url`/`openapi_url` under the prefix; `/healthz` (must build **no** engine) and `/readyz`; **no** `CORSMiddleware`.
+- [x] **T13** Tests: error envelope shape, 422→400 override, `WWW-Authenticate` on 401s, `request_id` isolation, no secret ever logged, `/healthz` engine-free. *(151 tests, 97.5%)*
 - [ ] **T14** `models/enums.py` — `Role`, `IncidentStatus`, `Priority`, `NoteVisibility`.
 - [ ] **T15** `models/user.py` — `users` (+`is_active`, `sessions_valid_from`, `failed_login_count`, `locked_until`), `engineer_profiles` (1:1), `refresh_tokens`.
 - [ ] **T16** `models/facility.py` — `buildings`, `floors` (uq `building+level`), `seats` (uq `floor+code`).
 - [ ] **T17** `models/catalog.py` — `categories` (self-referential parent).
 - [ ] **T18** `models/incident.py` — `incidents` (required `building_id`; nullable `floor_id`/`seat_id`; four stamped timestamps), `incident_notes`, `incident_status_history`, `escalation_requests`.
 - [ ] **T19** `app_secrets` table — carrier for the random JWT secret.
-- [ ] **T20** Alembic: `env.py`, `script.py.mako`, `alembic.ini` above `acme_core/`, `db/migrate.py` building `Config` programmatically (`%`→`%%`).
+- [ ] **T20** Alembic (also adds the migrations-pending check to `/readyz`, deferred from T12): `env.py`, `script.py.mako`, `alembic.ini` above `acme_core/`, `db/migrate.py` building `Config` programmatically (`%`→`%%`).
 - [ ] **T21** `0001_initial` migration; review generated DDL by hand.
 - [ ] **T22** `tests/integration/conftest.py` — throwaway `acme_test_<pid>`, real `upgrade_head()`, savepoint rollback, `verify_session`, stale-DB sweep, correct dispose ordering.
 - [ ] **T23** `test_migrations.py` — upgrade → **downgrade base → upgrade**; **no pending autogenerate diff**; 12 tables; naming convention applied.
