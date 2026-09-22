@@ -31,3 +31,7 @@ bcrypt==5.0.0
 # PyJWT rather than python-jose (unmaintained, CVE history). HS256 needs no
 # `cryptography` wheel, saving ~10 MB unzipped and an arch risk.
 PyJWT==2.11.0
+
+# Required by Pydantic's EmailStr. Pinned explicitly rather than relying on the
+# pydantic[email] extra, so the deploy-time install resolves the same version.
+email-validator==2.3.0
