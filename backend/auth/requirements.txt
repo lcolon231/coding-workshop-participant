@@ -17,3 +17,9 @@ psycopg[binary]==3.3.6
 # rubric-scored. SQLAlchemy is the larger memory line item; if the 128 MB
 # ceiling bites, drop the ORM before dropping this.
 fastapi==0.141.1
+
+# A runtime dependency, not just a dev tool: Aurora is not publicly accessible
+# (infra/rds.tf sets no publicly_accessible), so the only compute that can
+# migrate it is a Lambda inside the VPC. Imported lazily in admin_actions so it
+# costs zip bytes rather than cold-start memory on the request path.
+alembic==1.20.0

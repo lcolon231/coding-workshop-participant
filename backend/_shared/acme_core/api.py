@@ -60,6 +60,24 @@ def _check_database() -> bool:
     return True
 
 
+def _migrations_pending() -> bool | None:
+    """Report whether the database is behind the migrations on disk.
+
+    Imported lazily: alembic pulls in Mako and MarkupSafe, which the request
+    path never needs and a 128 MB Lambda cannot spare.
+
+    Returns:
+        True when behind, False when at head, None when it cannot be determined.
+    """
+    try:
+        from acme_core.db.migrate import migrations_pending
+
+        return migrations_pending()
+    except Exception:
+        _logger.warning("migration_check_failed", exc_info=True)
+        return None
+
+
 def _database_ready() -> bool:
     """Return cached readiness, refreshing at most every 30 seconds.
 
@@ -109,10 +127,10 @@ def _health_router(service_name: str) -> APIRouter:
     def readyz(response: Response) -> dict[str, Any]:
         """Report whether the service can serve traffic.
 
-        Returns a boolean only. The Alembic revision is deliberately not
-        exposed: it maps to a public git commit and so advertises exactly which
-        known issues this deployment has. The migrations-pending check is added
-        once Alembic lands.
+        Reports that migrations are outstanding but never applies them: DDL on
+        a user request path would race across concurrent cold starts and put a
+        schema change behind an HTTP timeout. A forgotten `make migrate-cloud`
+        becomes a loud 503 instead of a mysterious UndefinedTable later.
 
         Args:
             response: Injected so the status can be set to 503.
@@ -121,9 +139,17 @@ def _health_router(service_name: str) -> APIRouter:
             Readiness of each checked dependency.
         """
         ready = _database_ready()
-        if not ready:
+        pending = _migrations_pending() if ready else None
+        if not ready or pending:
             response.status_code = 503
-        return {"status": "ready" if ready else "not_ready", "database": ready}
+        # Booleans only. The Alembic revision maps to a public commit, so
+        # serving it would advertise exactly which known issues this
+        # deployment carries.
+        body: dict[str, Any] = {"database": ready}
+        if pending is not None:
+            body["migrations_pending"] = pending
+        body["status"] = "ready" if ready and not pending else "not_ready"
+        return body
 
     return router
 

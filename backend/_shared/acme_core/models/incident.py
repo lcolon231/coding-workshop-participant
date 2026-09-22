@@ -153,11 +153,13 @@ class IncidentStatusHistory(UUIDPrimaryKeyMixin, Base):
         UUID(as_uuid=True), ForeignKey("incidents.id", ondelete="CASCADE"), nullable=False
     )
     # Null for the row recording creation, which has no prior status.
+    # Distinct type names: both columns are IncidentStatus, and the CHECK is
+    # named after the type, so sharing one name collides within this table.
     from_status: Mapped[Optional[IncidentStatus]] = mapped_column(
-        enum_type(IncidentStatus), nullable=True
+        enum_type(IncidentStatus, name="history_from_status"), nullable=True
     )
     to_status: Mapped[IncidentStatus] = mapped_column(
-        enum_type(IncidentStatus), nullable=False
+        enum_type(IncidentStatus, name="history_to_status"), nullable=False
     )
     actor_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False

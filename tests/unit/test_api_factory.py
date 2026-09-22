@@ -160,3 +160,27 @@ class TestCors:
         """
         resp = client.get("/api/auth/healthz", headers={"Origin": "https://evil.example"})
         assert "access-control-allow-origin" not in resp.headers
+
+
+class TestMigrationProbe:
+    def test_failure_to_check_is_reported_as_unknown(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A probe that cannot determine state must not claim the service is fine."""
+        from acme_core import api
+
+        def _boom() -> bool:
+            raise RuntimeError("no such table")
+
+        monkeypatch.setattr("acme_core.db.migrate.migrations_pending", _boom)
+        assert api._migrations_pending() is None
+
+    def test_pending_migrations_make_readyz_503(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr("acme_core.api._check_database", lambda: True)
+        monkeypatch.setattr("acme_core.api._migrations_pending", lambda: True)
+        reset_readiness_cache()
+        resp = client.get("/api/auth/readyz")
+        assert resp.status_code == 503
+        assert resp.json()["migrations_pending"] is True

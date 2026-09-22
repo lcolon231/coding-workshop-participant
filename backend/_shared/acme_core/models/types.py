@@ -8,7 +8,7 @@ from sqlalchemy import Enum as SAEnum
 _ENUM_LENGTH = 32
 
 
-def enum_type(enum_cls: type[StrEnum]) -> SAEnum:
+def enum_type(enum_cls: type[StrEnum], *, name: str | None = None) -> SAEnum:
     """Build a VARCHAR-backed column type for a StrEnum.
 
     `native_enum=False` emits VARCHAR instead of a PostgreSQL ENUM, and
@@ -18,14 +18,23 @@ def enum_type(enum_cls: type[StrEnum]) -> SAEnum:
     its name ("FACILITY_ADMIN"), so rows read naturally in psql and in a CSV
     export.
 
+    The generated CHECK is named after the type, and PostgreSQL requires
+    constraint names to be unique within a table. Two columns on one table
+    sharing an enum therefore need distinct `name` values, or the second
+    CREATE TABLE fails with DuplicateObject.
+
     Args:
         enum_cls: The enumeration to store.
+        name: Type name, and so the CHECK constraint name. Defaults to the
+            lower-cased class name; pass it explicitly when one table has two
+            columns of the same enum.
 
     Returns:
         A SQLAlchemy type for use in `mapped_column`.
     """
     return SAEnum(
         enum_cls,
+        name=name or enum_cls.__name__.lower(),
         native_enum=False,
         create_constraint=True,
         length=_ENUM_LENGTH,
