@@ -45,4 +45,5 @@ class TestReadyz:
         """A revision id maps to a public commit."""
         body = client.get("/api/auth/readyz").json()
         assert not any("revision" in key or "sha" in key for key in body)
-        assert all(isinstance(v, (bool, str)) for v in body.values())
+        # Booleans, a status string, or null when a check could not run.
+        assert all(v is None or isinstance(v, (bool, str)) for v in body.values())

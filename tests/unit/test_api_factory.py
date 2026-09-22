@@ -95,6 +95,12 @@ class TestReadiness:
         assert resp.status_code == 503
         assert resp.json()["database"] is False
 
+    def test_undeterminable_migration_state_is_null_not_false(
+        self, client: TestClient
+    ) -> None:
+        """Null and false are different: one is "behind", one is "unknown"."""
+        assert client.get("/api/auth/readyz").json()["migrations_pending"] is None
+
     def test_reachable_database_is_200(
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -184,3 +190,37 @@ class TestMigrationProbe:
         resp = client.get("/api/auth/readyz")
         assert resp.status_code == 503
         assert resp.json()["migrations_pending"] is True
+
+
+class TestPublishedDocumentation:
+    """The OpenAPI page is an artifact a reviewer reads; treat it as output."""
+
+    @pytest.fixture
+    def schema(self, client: TestClient) -> dict:
+        return client.get("/api/auth/openapi.json").json()
+
+    @pytest.mark.parametrize("path", ["/api/auth/healthz", "/api/auth/readyz"])
+    def test_description_does_not_leak_docstring_sections(
+        self, schema: dict, path: str
+    ) -> None:
+        """FastAPI renders the whole docstring, so Args:/Returns: would show up."""
+        description = schema["paths"][path]["get"]["description"]
+        assert "Args:" not in description
+        assert "Returns:" not in description
+
+    @pytest.mark.parametrize("path", ["/api/auth/healthz", "/api/auth/readyz"])
+    def test_responses_have_a_real_schema(self, schema: dict, path: str) -> None:
+        """Without a response_model this documents `{"additionalProp1": {}}`."""
+        content = schema["paths"][path]["get"]["responses"]["200"]["content"]
+        assert "$ref" in content["application/json"]["schema"]
+
+    def test_readyz_documents_its_failure_mode(self, schema: dict) -> None:
+        """An endpoint whose purpose is to go 503 must document the 503."""
+        assert "503" in schema["paths"]["/api/auth/readyz"]["get"]["responses"]
+
+    def test_error_envelope_is_documented_for_reuse(self) -> None:
+        from acme_core.errors import ErrorResponse, error_responses
+
+        block = error_responses(400, 404)
+        assert block[400]["model"] is ErrorResponse
+        assert "details" in ErrorResponse.model_fields

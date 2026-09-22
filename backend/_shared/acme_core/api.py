@@ -18,6 +18,7 @@ from collections.abc import Awaitable, Callable, Sequence
 from typing import Any
 
 from fastapi import APIRouter, FastAPI, Request, Response
+from pydantic import BaseModel, Field
 
 from acme_core import build_stamp
 from acme_core.errors import register_exception_handlers
@@ -36,6 +37,46 @@ _logger = get_logger(__name__)
 _READY_CACHE_SECONDS = 30
 
 _ready_cache: tuple[float, bool] = (0.0, False)
+
+
+class BuildInfo(BaseModel):
+    """Git provenance of the shared code this process is running."""
+
+    git_sha: str = Field(
+        description="Short commit the vendored acme_core was synced from, "
+        "or 'source' when running from the working tree.",
+        examples=["9064bc9"],
+    )
+    dirty: bool | None = Field(
+        default=None,
+        description="Whether that working tree had uncommitted changes.",
+    )
+    stamped_at: str | None = Field(
+        default=None, description="When the sync ran, UTC ISO-8601."
+    )
+
+
+class HealthResponse(BaseModel):
+    """Liveness and which build is answering."""
+
+    status: str = Field(description="Always 'ok'; a failure is a non-200.", examples=["ok"])
+    service: str = Field(description="Service name, matching its path prefix.", examples=["auth"])
+    build: BuildInfo
+
+
+class ReadinessResponse(BaseModel):
+    """Whether this instance can serve traffic, and why not if it cannot."""
+
+    status: str = Field(
+        description="'ready' or 'not_ready'. Mirrors the status code.",
+        examples=["ready"],
+    )
+    database: bool = Field(description="Whether the database answered.")
+    migrations_pending: bool | None = Field(
+        default=None,
+        description="True when the schema is behind the deployed code. "
+        "Null when it could not be determined, which is not the same as false.",
+    )
 
 
 def _check_database() -> bool:
@@ -111,9 +152,22 @@ def _health_router(service_name: str) -> APIRouter:
     """
     router = APIRouter(tags=["health"])
 
-    @router.get("/healthz", summary="Liveness and build provenance")
+    @router.get(
+        "/healthz",
+        summary="Liveness and build provenance",
+        # Explicit description rather than the docstring: FastAPI renders the
+        # whole docstring, so Google-style Args/Returns sections meant for
+        # developers would otherwise appear in the public API documentation.
+        description=(
+            "Reports that the process is up and identifies the build answering. "
+            "Touches no database, so it cannot flap while Aurora scales to zero. "
+            "Use the `build.git_sha` field to confirm a deployment is running the "
+            "code you expect."
+        ),
+        response_model=HealthResponse,
+    )
     def healthz() -> dict[str, Any]:
-        """Report that the process is up and which build it is running.
+        """Report liveness and the running build.
 
         Deliberately touches no database. A liveness probe that depends on
         Aurora would flap every time the cluster scales to zero.
@@ -123,14 +177,29 @@ def _health_router(service_name: str) -> APIRouter:
         """
         return {"status": "ok", "service": service_name, "build": build_stamp()}
 
-    @router.get("/readyz", summary="Readiness")
+    @router.get(
+        "/readyz",
+        summary="Readiness",
+        description=(
+            "Reports whether this instance can serve traffic: the database "
+            "answers and the schema is at the revision this code expects.\n\n"
+            "Returns **503** when either check fails. Pending migrations are "
+            "reported, never applied -- schema changes on a request path race "
+            "across concurrent cold starts. A forgotten migration therefore "
+            "surfaces here rather than as an unexplained error later.\n\n"
+            "The Alembic revision is deliberately not exposed: it maps to a "
+            "public commit and would advertise this deployment's known issues."
+        ),
+        response_model=ReadinessResponse,
+        responses={
+            503: {
+                "model": ReadinessResponse,
+                "description": "Database unreachable, or migrations are pending.",
+            }
+        },
+    )
     def readyz(response: Response) -> dict[str, Any]:
         """Report whether the service can serve traffic.
-
-        Reports that migrations are outstanding but never applies them: DDL on
-        a user request path would race across concurrent cold starts and put a
-        schema change behind an HTTP timeout. A forgotten `make migrate-cloud`
-        becomes a loud 503 instead of a mysterious UndefinedTable later.
 
         Args:
             response: Injected so the status can be set to 503.
@@ -142,14 +211,11 @@ def _health_router(service_name: str) -> APIRouter:
         pending = _migrations_pending() if ready else None
         if not ready or pending:
             response.status_code = 503
-        # Booleans only. The Alembic revision maps to a public commit, so
-        # serving it would advertise exactly which known issues this
-        # deployment carries.
-        body: dict[str, Any] = {"database": ready}
-        if pending is not None:
-            body["migrations_pending"] = pending
-        body["status"] = "ready" if ready and not pending else "not_ready"
-        return body
+        return {
+            "database": ready,
+            "migrations_pending": pending,
+            "status": "ready" if ready and not pending else "not_ready",
+        }
 
     return router
 

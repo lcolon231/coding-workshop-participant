@@ -21,6 +21,7 @@ from typing import Any, ClassVar
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from acme_core.logging_config import get_logger, get_request_id
@@ -29,6 +30,67 @@ _logger = get_logger(__name__)
 
 # Location prefixes Pydantic reports that name the request part, not a field.
 _LOCATION_PREFIXES = frozenset({"body", "query", "path", "header", "cookie"})
+
+
+class ErrorDetail(BaseModel):
+    """One field-level validation problem."""
+
+    field: str = Field(description="Dotted path to the offending field.", examples=["email"])
+    message: str = Field(
+        description="What was wrong with it.",
+        examples=["must be an @acme.inc address"],
+    )
+
+
+class ErrorResponse(BaseModel):
+    """The envelope returned by every failure, in every service.
+
+    `error` is a stable machine-readable code, not prose: `token_expired` and
+    `refresh_token_reused` are both 401 but call for opposite client behaviour,
+    and a status code alone cannot distinguish them.
+    """
+
+    error: str = Field(
+        description="Stable machine-readable code. Switch on this, not on the message.",
+        examples=["validation_error"],
+    )
+    message: str = Field(
+        description="Human-readable summary, safe to show a user.",
+        examples=["Request validation failed."],
+    )
+    details: list[ErrorDetail] = Field(
+        default_factory=list,
+        description="Field-level problems. Always present; empty when not applicable.",
+    )
+    request_id: str | None = Field(
+        default=None,
+        description="Correlation id, also returned in the X-Request-Id header.",
+    )
+
+
+# Reusable OpenAPI response blocks, so every service documents failures the
+# same way instead of each route inventing its own.
+def error_responses(*statuses: int) -> dict[int | str, dict[str, object]]:
+    """Build OpenAPI `responses` entries for the given status codes.
+
+    Args:
+        statuses: HTTP status codes this endpoint can fail with.
+
+    Returns:
+        A mapping suitable for a FastAPI route's `responses` argument.
+    """
+    described = {
+        400: "Validation failed. `details` names the offending fields.",
+        401: "Missing, expired or wrong-type token.",
+        403: "Authenticated, but not permitted.",
+        404: "Not found, or outside your visibility.",
+        409: "Conflicts with current state.",
+        500: "Unexpected error. The message is scrubbed; quote `request_id`.",
+    }
+    return {
+        status: {"model": ErrorResponse, "description": described.get(status, "Error.")}
+        for status in statuses
+    }
 
 
 class AppError(Exception):

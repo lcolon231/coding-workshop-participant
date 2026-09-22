@@ -7,8 +7,9 @@
 # `deploy` depends on `sync` because bin/deploy-backend.sh is plain
 # `terraform apply` and never vendors the shared package itself.
 
-.PHONY: help venv serve migrate revision seed test cov lint audit \
-        sync verify-sync deploy migrate-cloud seed-cloud clean
+.PHONY: help venv serve migrate downgrade db-current db-pending revision \
+        seed test cov lint audit sync verify-sync deploy migrate-cloud \
+        seed-cloud clean
 
 VENV    := .venv
 PY      := $(VENV)/bin/python
@@ -36,6 +37,15 @@ serve: ## Run the service locally with uvicorn (:8000)
 
 migrate: ## Apply migrations to the local database
 	$(PY) -m acme_core.db.migrate upgrade
+
+downgrade: ## Revert migrations:  make downgrade [TO=base|<revision>]
+	$(PY) -m acme_core.db.migrate downgrade $(or $(TO),base)
+
+db-current: ## Print the revision the local database is stamped with
+	$(PY) -m acme_core.db.migrate current
+
+db-pending: ## Is the local database behind the code?
+	$(PY) -m acme_core.db.migrate pending
 
 revision: ## Autogenerate a migration:  make revision M="add widgets"
 	$(VENV)/bin/alembic -c backend/_shared/alembic.ini revision --autogenerate -m "$(M)"
