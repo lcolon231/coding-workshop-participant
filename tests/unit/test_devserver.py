@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from pydantic import create_model
 
 from tools import devserver
 
@@ -52,12 +54,58 @@ class TestCombined:
         assert resp.json()["error"] == "not_found"
 
 
+class TestCombinedDocs:
+    @pytest.fixture
+    def client(self, monkeypatch: pytest.MonkeyPatch) -> TestClient:
+        monkeypatch.delenv("ACME_SERVICE_NAME", raising=False)
+        return TestClient(devserver.app(), raise_server_exceptions=False)
+
+    def test_one_page_over_every_service(self, client: TestClient) -> None:
+        page = client.get("/api/docs")
+        assert page.status_code == 200
+        assert page.headers["content-type"].startswith("text/html")
+        assert "/api/openapi.json" in page.text
+
+    def test_the_schema_holds_every_service_and_groups_by_it(self, client: TestClient) -> None:
+        schema = client.get("/api/openapi.json").json()
+        assert "/api/auth/login" in schema["paths"]
+        assert "/api/incidents/healthz" in schema["paths"]
+        for path, operations in schema["paths"].items():
+            service = path.split("/")[2]
+            for operation in operations.values():
+                assert all(tag.startswith(f"{service}: ") for tag in operation["tags"])
+        assert "HTTPBearer" in schema["components"]["securitySchemes"]
+        # Shared by every service, identical, so kept once under its own name.
+        assert "HealthResponse" in schema["components"]["schemas"]
+        assert "IncidentsHealthResponse" not in schema["components"]["schemas"]
+
+    def test_a_conflicting_schema_name_is_renamed_not_overwritten(self) -> None:
+        first, second = FastAPI(), FastAPI()
+        one = create_model("Thing", a=(int, ...))
+        two = create_model("Thing", b=(str, ...))
+
+        @first.get("/api/one/thing", response_model=one)
+        def _one() -> None: ...
+
+        @second.get("/api/two/thing", response_model=two)
+        def _two() -> None: ...
+
+        merged = devserver.merge_openapi({"one": first, "two": second})
+        schemas = merged["components"]["schemas"]
+        assert "a" in schemas["Thing"]["properties"]
+        assert "b" in schemas["TwoThing"]["properties"]
+        ref = merged["paths"]["/api/two/thing"]["get"]["responses"]["200"]["content"]
+        assert ref["application/json"]["schema"]["$ref"] == "#/components/schemas/TwoThing"
+
+
 class TestSingle:
     def test_naming_a_service_serves_only_that_one(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("ACME_SERVICE_NAME", "incidents")
         client = TestClient(devserver.app(), raise_server_exceptions=False)
         assert client.get("/api/incidents/healthz").json()["service"] == "incidents"
         assert client.get("/api/auth/healthz").status_code == 404
+        # The combined page belongs to the dispatcher, not to any one service.
+        assert client.get("/api/docs").status_code == 404
 
     def test_a_service_without_a_package_gets_the_shared_routes(
         self, monkeypatch: pytest.MonkeyPatch

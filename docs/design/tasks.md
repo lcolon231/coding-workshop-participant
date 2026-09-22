@@ -31,7 +31,7 @@ are placed in the phase where they belong.
 - [x] **T3** `tools/verify-sync.sh` + `tools/db.sh`: staleness guard and synchronous admin-invoke wrapper.
 - [x] **T4** `Makefile` with 16 targets; `deploy` depends on `sync` + `verify-sync`.
 - [x] **T5** `backend/auth` stub, `.gitignore`, `pyrightconfig.json` excluding vendored copies.
-- [x] **T121** `tools/devserver.py` combined mode — `make serve` runs every discovered service in one process behind a prefix dispatcher, so the single Vite proxy rule (T75) reaches `/api/incidents` locally as CloudFront does in the cloud; `SERVICE=<name>` keeps the one-Lambda shape.
+- [x] **T121** `tools/devserver.py` combined mode — `make serve` runs every discovered service in one process behind a prefix dispatcher, so the single Vite proxy rule (T75) reaches `/api/incidents` locally as CloudFront does in the cloud; `SERVICE=<name>` keeps the one-Lambda shape. `/api/docs` is one Swagger page over every service (merged schema; local only, since CloudFront routes nothing at that path).
 
 ## Phase 1 — `acme_core` shared kernel ✅
 
