@@ -35,7 +35,8 @@ class TestCombined:
     @pytest.mark.parametrize("service", ["auth", "incidents"])
     def test_each_service_keeps_its_own_docs(self, client: TestClient, service: str) -> None:
         schema = client.get(f"/api/{service}/openapi.json").json()
-        assert all(path.startswith(f"/api/{service}/") for path in schema["paths"])
+        prefix = f"/api/{service}"
+        assert all(p == prefix or p.startswith(f"{prefix}/") for p in schema["paths"])
 
     def test_a_service_404_is_the_service_envelope(self, client: TestClient) -> None:
         resp = client.get("/api/auth/nope")

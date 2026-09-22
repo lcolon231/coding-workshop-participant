@@ -14,8 +14,8 @@ are placed in the phase where they belong.
 |---|---|---|
 | 0 | Tooling foundation | 6 / 6 |
 | 1 | `acme_core` shared kernel | 30 / 30 |
-| 2 | `auth` service | 15 / 16 |
-| 3 | `incidents` service | 1 / 16 |
+| 2 | `auth` service | 16 / 16 |
+| 3 | `incidents` service | 15 / 16 |
 | 4 | `facilities` service | 0 / 10 |
 | 5 | Frontend | 5 / 24 |
 | 6 | Cloud, CI and operations | 0 / 12 |
@@ -81,27 +81,27 @@ are placed in the phase where they belong.
 - [x] **T119** `POST /me/password` — verify current password, bump `sessions_valid_from`, revoke refresh tokens, 204 *(api.md A7)*.
 - [x] **T120** User profile fields — `occupation` (required iff Employee, cleared on leaving Employee) and `date_of_birth` (required for every user, never after today, not before 1900); migration `8c235859e485`; exact `email` filter on `GET /users` so an admin can find a user to promote.
 - [x] **T45** `admin_actions.py` — `migrate` / `seed` / `db-current`; `seed` requires `confirm == APP_ID`.
-- [~] **T46** `seed.py` — idempotent `uuid5` get-or-create, password **from payload**, strictly additive, histories replayed through `validate_transition`. *(users done; facilities, categories and incident histories land with their services)*
+- [x] **T46** `seed.py` — idempotent `uuid5` get-or-create, password **from payload**, strictly additive, histories replayed through `validate_transition`. *(two buildings with floors and seats, a two-level category tree, six incidents across every status; reporters resolved by email so a pre-registered account keeps its id)*
 - [x] **T47** Integration tests — register, login, refresh, me, admin users, `test_route_contract`, `test_error_envelope`, `test_seed`, `test_readyz_migrations`. *(79 API + 11 seed tests; route contract driven from the OpenAPI schema)*
 - [x] **T48** `tests/e2e/test_auth_journey.py` — real uvicorn, real commits across connections. *(throwaway `acme_e2e_<pid>` database, `tools.devserver:app` as a child process, every persistence assertion over a fresh `NullPool` connection; 7 tests, ~9 s)*
 
 ## Phase 3 — `incidents` service
 
 - [x] **T49** Service scaffold: `requirements.txt`, `function.py`, `incidents_service/` package. *(no alembic: migrations stay auth-only, so `function.py` refuses admin commands by name; `make serve SERVICE=incidents` now exports `ACME_SERVICE_NAME`)*
-- [ ] **T50** `POST /api/incidents` — reporter from principal, never from the body.
-- [ ] **T51** `GET /api/incidents` — filters (status, priority, building, assignee, free-text) + pagination, all through `scope_incidents`; `total` counted through the same helper.
-- [ ] **T52** `GET /api/incidents/{id}` — scoped read, **404 not 403**.
-- [ ] **T53** `PUT /api/incidents/{id}` — scoped `SELECT ... FOR UPDATE` then mutate; status **not** settable here.
-- [ ] **T54** `DELETE /api/incidents/{id}` — 204, admin only.
-- [ ] **T55** `POST /api/incidents/{id}/transition` — the only status path; applies `validate_transition` and the stamp policy; writes `incident_status_history`.
-- [ ] **T56** `GET /api/incidents/workflow` — serialises `TRANSITIONS` so the client renders only legal actions.
-- [ ] **T57** Notes — create/list; internal notes hidden from non-staff; child reachable only via a scoped parent join.
-- [ ] **T58** Escalation requests — create, list, approve/reject.
-- [ ] **T59** Reporting endpoints — SLA and volume aggregates over the four stamped timestamps (`GROUP BY`, not window functions).
-- [ ] **T60** Integration tests for every endpoint above, both roles, both scope outcomes.
-- [ ] **T61** `test_scoping_db.py` — real rows, all three roles, the 404/200 pair on the **same** id.
-- [ ] **T62** Transition integration tests — each legal edge end to end, plus history rows and stamp values. Includes the full **admin-triage journey**: employee reports → admin assigns while Open → the engineer (who could not see it before) now can, and starts work *(api.md §4)*.
-- [ ] **T63** Filter/pagination tests incl. sort allowlist rejection.
+- [x] **T50** `POST /api/incidents` — reporter from principal, never from the body. *(building/floor/seat nesting and category checked together, every problem reported in one `details[]`)*
+- [x] **T51** `GET /api/incidents` — filters (status, priority, building, assignee, free-text) + pagination, all through `scope_incidents`; `total` counted through the same helper. *(priority and status sort by rank, not by display string)*
+- [x] **T52** `GET /api/incidents/{id}` — scoped read, **404 not 403**. *(`allowed_transitions` omits a requirement the incident already satisfies, e.g. an existing assignee)*
+- [x] **T53** `PUT /api/incidents/{id}` — scoped `SELECT ... FOR UPDATE` then mutate; status **not** settable here. *(one disallowed field rejects the whole request; unassigning only while Open)*
+- [x] **T54** `DELETE /api/incidents/{id}` — 204, admin only.
+- [x] **T55** `POST /api/incidents/{id}/transition` — the only status path; applies `validate_transition` and the stamp policy; writes `incident_status_history`. *(history rows carry an explicit timestamp: `now()` is the transaction start, so two rows in one transaction would tie)*
+- [x] **T56** `GET /api/incidents/workflow` — serialises `TRANSITIONS` so the client renders only legal actions.
+- [x] **T57** Notes — create/list; internal notes hidden from non-staff; child reachable only via a scoped parent join.
+- [x] **T58** Escalation requests — create, list, approve/reject. *(approval raises priority one level in the same transaction; queue defaults to Pending, oldest first)*
+- [x] **T59** Reporting endpoints — SLA and volume aggregates over the four stamped timestamps (`GROUP BY`, not window functions). *(p90 via `percentile_cont`; `date_trunc` in UTC explicitly)*
+- [x] **T60** Integration tests for every endpoint above, both roles, both scope outcomes. *(`test_incidents_api.py`, 140 tests)*
+- [x] **T61** `test_scoping_db.py` — real rows, all three roles, the 404/200 pair on the **same** id. *(plus the same pair over HTTP in `TestGet`)*
+- [x] **T62** Transition integration tests — each legal edge end to end, plus history rows and stamp values. Includes the full **admin-triage journey**: employee reports → admin assigns while Open → the engineer (who could not see it before) now can, and starts work *(api.md §4)*. *(the five-step order of checks is pinned one test per step)*
+- [x] **T63** Filter/pagination tests incl. sort allowlist rejection.
 - [ ] **T64** Deploy and smoke-test the service.
 
 ## Phase 4 — `facilities` service
