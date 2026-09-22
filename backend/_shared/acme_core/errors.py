@@ -47,6 +47,16 @@ from acme_core.logging_config import get_logger, get_request_id
 
 _logger = get_logger(__name__)
 
+# The code reported when the *framework* raises a status, e.g. a routing 404.
+# Explicit because several classes share a status -- 401 alone has four. The
+# previous lookup iterated the class hierarchy and let the last match win, which
+# picked the generic class only because of the order classes are defined in;
+# reordering exceptions.py would have made a framework 401 report
+# `refresh_token_reused` and told the client its session had been stolen.
+_FRAMEWORK_ERRORS: dict[int, type[AppError]] = {
+    cls.status: cls for cls in (ValidationFailed, Unauthenticated, Forbidden, NotFound, Conflict)
+}
+
 # Location prefixes Pydantic reports that name the request part, not a field.
 _LOCATION_PREFIXES = frozenset({"body", "query", "path", "header", "cookie"})
 
@@ -198,8 +208,7 @@ async def handle_http_exception(_request: Request, exc: Exception) -> JSONRespon
     """
     status = exc.status_code if isinstance(exc, StarletteHTTPException) else 500
     detail = getattr(exc, "detail", None)
-    by_status = {cls.status: cls for cls in all_error_classes()}
-    cls = by_status.get(status, InternalError)
+    cls = _FRAMEWORK_ERRORS.get(status, InternalError)
     return _json(status, build_envelope(cls.code, str(detail or cls.default_message)))
 
 

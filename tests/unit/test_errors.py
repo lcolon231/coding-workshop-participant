@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from fastapi.testclient import TestClient
 from pydantic import BaseModel
 
@@ -59,6 +59,11 @@ def client() -> TestClient:
         by_code = {cls.code: cls for cls in all_error_classes()}
         raise by_code[code]()
 
+    @router.get("/framework/{status}")
+    def _framework(status: int) -> None:
+        """What FastAPI's own security helpers and Starlette raise."""
+        raise HTTPException(status_code=status)
+
     @router.get("/boom")
     def _boom() -> None:
         raise RuntimeError(f"connection string postgres://user:{FAKE_PW}@host/db")
@@ -113,7 +118,7 @@ class TestCatalogIntegrity:
             (Forbidden, 403),
             (NotFound, 404),
             (Conflict, 409),
-            (RefreshTokenReused, 409),
+            (RefreshTokenReused, 401),
             (InvalidTransition, 409),
             (InternalError, 500),
         ],
@@ -152,6 +157,29 @@ class TestEnvelopeShape:
         assert set(body) == ENVELOPE_KEYS
         assert body["error"] == "not_found"
 
+    @pytest.mark.parametrize(
+        ("status", "code"),
+        [
+            (400, "validation_error"),
+            (401, "unauthenticated"),
+            (403, "forbidden"),
+            (404, "not_found"),
+            (409, "conflict"),
+        ],
+    )
+    def test_framework_errors_map_to_the_generic_code(
+        self, client: TestClient, status: int, code: str
+    ) -> None:
+        """Several classes share a status; the framework must get the generic one.
+
+        Pinned because the answer used to depend on the order classes were
+        defined in, and a framework 401 reported as `refresh_token_reused`
+        would tell the client its session had been stolen.
+        """
+        resp = client.get(f"{P}/framework/{status}")
+        assert resp.status_code == status
+        assert resp.json()["error"] == code
+
     def test_method_not_allowed_uses_the_envelope(self, client: TestClient) -> None:
         body = client.post(f"{P}/raise/not_found").json()
         assert set(body) == ENVELOPE_KEYS
@@ -159,7 +187,9 @@ class TestEnvelopeShape:
 
 class TestAuthChallenge:
     @pytest.mark.parametrize(
-        "cls", [Unauthenticated, TokenExpired, WrongTokenType], ids=lambda c: c.code
+        "cls",
+        [Unauthenticated, TokenExpired, WrongTokenType, RefreshTokenReused],
+        ids=lambda c: c.code,
     )
     def test_401_carries_www_authenticate(
         self, client: TestClient, cls: type[AppError]
