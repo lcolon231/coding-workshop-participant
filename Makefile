@@ -50,7 +50,7 @@ db-pending: ## Is the local database behind the code?
 revision: ## Autogenerate a migration:  make revision M="add widgets"
 	$(VENV)/bin/alembic -c backend/_shared/alembic.ini revision --autogenerate -m "$(M)"
 
-seed: migrate ## Seed the local database (idempotent; re-running creates nothing)
+seed: migrate ## Seed demo users locally: ACME_SEED_PASSWORD=... make seed (idempotent)
 	$(PY) -m acme_core.seed
 
 test: ## Run the test suite
