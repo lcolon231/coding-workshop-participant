@@ -1,0 +1,9 @@
+# Commit 1: intentionally empty.
+#
+# This is a throwaway smoke-test deployment that proves the zip builds, the
+# vendored acme_core import resolves at /var/task, and CloudFront's
+# /api/auth* behavior routes here. Keeping the dependency set empty gives a
+# clean baseline `Max Memory Used` for a trivial python3.13 function, which is
+# what calibrates the 128 MB budget before FastAPI and SQLAlchemy are added.
+#
+# The real == pinned dependency set lands with the service at commit 10.

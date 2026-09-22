@@ -1,0 +1,8 @@
+{
+  "_comment": "backend/*/acme_core are rsynced build artifacts. Without this exclusion the IDE resolves 'Go to Definition' into a copy, and the next sync --delete silently discards anything edited there.",
+  "include": ["backend/_shared", "backend/auth", "tests"],
+  "exclude": ["backend/*/acme_core", "**/__pycache__", ".venv"],
+  "extraPaths": ["backend/_shared", "backend/auth"],
+  "pythonVersion": "3.13",
+  "typeCheckingMode": "basic"
+}
