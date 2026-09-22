@@ -9,14 +9,14 @@ Derived from the brief, the rubric in [`../full-stack.md`](../full-stack.md), an
 | Phase | Scope | Done |
 |---|---|---|
 | 0 | Tooling foundation | 5 / 5 |
-| 1 | `acme_core` shared kernel | 28 / 29 |
+| 1 | `acme_core` shared kernel | 29 / 29 |
 | 2 | `auth` service | 0 / 14 |
 | 3 | `incidents` service | 0 / 16 |
 | 4 | `facilities` service | 0 / 10 |
 | 5 | Frontend | 0 / 24 |
 | 6 | Cloud, CI and operations | 0 / 12 |
 | 7 | Documentation and handover | 0 / 7 |
-| | **Total** | **33 / 117** |
+| | **Total** | **34 / 117** |
 
 ---
 
@@ -28,7 +28,7 @@ Derived from the brief, the rubric in [`../full-stack.md`](../full-stack.md), an
 - [x] **T4** `Makefile` with 16 targets; `deploy` depends on `sync` + `verify-sync`.
 - [x] **T5** `backend/auth` stub, `.gitignore`, `pyrightconfig.json` excluding vendored copies.
 
-## Phase 1 — `acme_core` shared kernel
+## Phase 1 — `acme_core` shared kernel ✅
 
 - [x] **T6** `config.py` — `Settings`, single `in_lambda()` discriminator, URL builder, password masking.
 - [x] **T7** `db/engine.py` — locked lazy engine, `pool_size=1`, `pre_ping`, `get_db()`, `dispose_engine()`.
@@ -58,7 +58,7 @@ Derived from the brief, the rubric in [`../full-stack.md`](../full-stack.md), an
 - [x] **T31** `security/principal.py` + `scoping.py` — `Principal`, `require_roles()`, `scope_incidents`, `scope_notes`.
 - [x] **T32** `schemas/` — `StrictModel` (`extra="forbid"`), auth, facility, incident schemas; `Page[T]` for pagination.
 - [x] **T33** Schema tests — `@acme.inc` gate incl. `…@acme.inc.evil.com`, case, whitespace; `role` in body; **no request schema contains a server-controlled field**.
-- [ ] **T34** `lambda_entry.py` — pure `classify(event)`; positive `source` marker, no HTTP keys, allowlisted action, fail closed.
+- [x] **T34** `lambda_entry.py` — pure `classify(event)`; positive `source` marker, no HTTP keys, allowlisted action, fail closed. *(76 tests, 100%)*
 
 ## Phase 2 — `auth` service
 
