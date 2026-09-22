@@ -23,3 +23,11 @@ fastapi==0.141.1
 # migrate it is a Lambda inside the VPC. Imported lazily in admin_actions so it
 # costs zip bytes rather than cold-start memory on the request path.
 alembic==1.20.0
+
+# bcrypt directly, never passlib: passlib 1.7.4 (the last release, 2020) reads
+# bcrypt.__about__.__version__, which bcrypt >= 4.1 removed, producing a
+# traceback-in-a-warning on every hash.
+bcrypt==5.0.0
+# PyJWT rather than python-jose (unmaintained, CVE history). HS256 needs no
+# `cryptography` wheel, saving ~10 MB unzipped and an arch risk.
+PyJWT==2.11.0
