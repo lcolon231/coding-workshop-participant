@@ -9,14 +9,14 @@ Derived from the brief, the rubric in [`../full-stack.md`](../full-stack.md), an
 | Phase | Scope | Done |
 |---|---|---|
 | 0 | Tooling foundation | 5 / 5 |
-| 1 | `acme_core` shared kernel | 26 / 29 |
+| 1 | `acme_core` shared kernel | 28 / 29 |
 | 2 | `auth` service | 0 / 14 |
 | 3 | `incidents` service | 0 / 16 |
 | 4 | `facilities` service | 0 / 10 |
 | 5 | Frontend | 0 / 24 |
 | 6 | Cloud, CI and operations | 0 / 12 |
 | 7 | Documentation and handover | 0 / 7 |
-| | **Total** | **31 / 117** |
+| | **Total** | **33 / 117** |
 
 ---
 
@@ -56,8 +56,8 @@ Derived from the brief, the rubric in [`../full-stack.md`](../full-stack.md), an
 - [x] **T29** `security/tokens.py` — PyJWT, pinned `algorithms=["HS256"]`, `typ`/`iss`/`aud`/`jti`/`iat`, reject absent `typ`.
 - [x] **T30** Token and password tests — `alg:none`, wrong secret, expired, missing `sub`, malformed, >72 bytes, salt.
 - [x] **T31** `security/principal.py` + `scoping.py` — `Principal`, `require_roles()`, `scope_incidents`, `scope_notes`.
-- [ ] **T32** `schemas/` — `StrictModel` (`extra="forbid"`), auth, facility, incident schemas; `Page[T]` for pagination.
-- [ ] **T33** Schema tests — `@acme.inc` gate incl. `…@acme.inc.evil.com`, case, whitespace; `role` in body; **no request schema contains a server-controlled field**.
+- [x] **T32** `schemas/` — `StrictModel` (`extra="forbid"`), auth, facility, incident schemas; `Page[T]` for pagination.
+- [x] **T33** Schema tests — `@acme.inc` gate incl. `…@acme.inc.evil.com`, case, whitespace; `role` in body; **no request schema contains a server-controlled field**.
 - [ ] **T34** `lambda_entry.py` — pure `classify(event)`; positive `source` marker, no HTTP keys, allowlisted action, fail closed.
 
 ## Phase 2 — `auth` service
