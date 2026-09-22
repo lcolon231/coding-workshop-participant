@@ -370,9 +370,9 @@ make seed                    # 2 buildings, 6 floors, 40 seats, 7 users, ~30 inc
 
 # 4. register + login
 curl -sX POST localhost:8000/api/auth/register -H 'Content-Type: application/json' \
-  -d '{"email":"demo@acme.inc","password":"S3cret!23","full_name":"Demo"}'        # 201
+  -d '{"email":"demo@acme.inc","password":"<password>","full_name":"Demo"}'        # 201
 curl -sX POST localhost:8000/api/auth/login -H 'Content-Type: application/json' \
-  -d '{"email":"demo@acme.inc","password":"S3cret!23"}'                            # 200 + pair
+  -d '{"email":"demo@acme.inc","password":"<password>"}'                            # 200 + pair
 curl -s localhost:8000/api/auth/me -H "Authorization: Bearer $ACCESS"              # 200 Employee
 
 # negative checks that must hold
@@ -407,7 +407,7 @@ curl -s "$(terraform -chdir=infra output -raw website_url)/api/auth/me" -H "Auth
 - Deploying from a non-linux-x86_64 host would ship wrong-arch wheels after a *successful*
   `terraform apply`. Deploy from the VDI.
 - The docs' env table (`backend/README.md`, `docs/full-stack.md`) claims local `POSTGRES_*` are
-  empty; `infra/locals.tf` injects `postgres`/`postgres`/`postgres123`. Terraform wins.
+  empty; `infra/locals.tf` injects the local dev defaults. Terraform wins.
 - `bin/start-dev.sh` remains the repo's documented entry point and no longer matches how we run
   things. NOTES.md must say so explicitly, since the rubric scores "runs locally from documented
   commands".

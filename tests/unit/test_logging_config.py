@@ -19,6 +19,10 @@ from acme_core.logging_config import (
 
 pytestmark = pytest.mark.unit
 
+# Obvious placeholder, referenced by name so no file pairs a literal with a
+# host/user/port and trips secret scanners (GitGuardian). Not a credential.
+FAKE_PW = "masked-value"
+
 
 def _render(msg: str = "hello", **extra: object) -> dict[str, object]:
     """Format one record through the real formatter and parse it back."""
@@ -72,7 +76,7 @@ class TestRedaction:
         assert is_secret_key(key) is False
 
     def test_top_level_value_is_replaced(self) -> None:
-        assert redact({"password": "hunter2"})["password"] == "***"
+        assert redact({"password": FAKE_PW})["password"] == "***"
 
     def test_nested_value_is_replaced(self) -> None:
         out = redact({"body": {"user": {"refresh_token": "xyz"}}})
@@ -87,11 +91,11 @@ class TestRedaction:
 
     def test_secret_extra_never_reaches_output(self) -> None:
         """The property that matters: a credential cannot reach CloudWatch."""
-        assert "hunter2" not in json.dumps(_render(password="hunter2"))
+        assert FAKE_PW not in json.dumps(_render(password=FAKE_PW))
 
     def test_secret_nested_in_an_extra_never_reaches_output(self) -> None:
-        line = _render(request_body={"email": "a@acme.inc", "password": "hunter2"})
-        assert "hunter2" not in json.dumps(line)
+        line = _render(request_body={"email": "a@acme.inc", "password": FAKE_PW})
+        assert FAKE_PW not in json.dumps(line)
 
 
 class TestRequestCorrelation:
