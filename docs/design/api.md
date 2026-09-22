@@ -310,9 +310,9 @@ matches the existing `FloorCreate` / `SeatCreate` schemas.
 | F18 | GET | `/categories/{category_id}` | ANY | 200 `CategoryOut` | T69 |
 | F19 | PUT | `/categories/{category_id}` | ADM | 200 `CategoryOut` | T69 |
 | F20 | DELETE | `/categories/{category_id}` | ADM | 204 | T69, T72 |
-| F21 | GET | `/engineers` | ADM | 200 `Page[EngineerProfileOut]` | T70 |
-| F22 | GET | `/engineers/{user_id}` | ADM | 200 `EngineerProfileOut` | T70 |
-| F23 | PUT | `/engineers/{user_id}` | ADM | 200 `EngineerProfileOut` | T70 |
+| F21 | GET | `/engineers` | ADM | 200 `Page[EngineerOut]` | T70 |
+| F22 | GET | `/engineers/{user_id}` | ADM | 200 `EngineerOut` | T70 |
+| F23 | PUT | `/engineers/{user_id}` | ADM | 200 `EngineerOut` | T70 |
 
 ### Buildings (F1–F5)
 
@@ -586,26 +586,32 @@ What each role may do, at a glance. "own" = reported by the caller; "assigned" =
 
 ## 6. Schema changes this design needs
 
-What exists in `acme_core/schemas/` today covers about half of this. Everything below is new or
-changed; none of it contains a server-controlled field unless it is admin-only and the schema test
-exempts it explicitly.
+Landed in T118. None of it contains a server-controlled field unless it is admin-only and the
+schema test exempts it explicitly, with a justification.
 
 **New**
 
 | Schema | Used by |
 |---|---|
+| `UpdateModel` base — `CLEARABLE` allowlist, `changes()` | every `PUT` (§1.4) |
+| `TimelineParams` (paging, oldest first) | I8, I9, I11 |
 | `RegisterAccepted` (`{message}`) | A1 |
-| `MeOut` (`UserOut` + `engineer_profile`) | A6 |
+| `MeOut` (`UserOut` + `engineer_profile: EngineerProfileOut`) | A6 |
 | `ChangePasswordRequest` | A7 |
 | `UserFilters` | A8 |
-| `UserSummary` (`{id, full_name, role}`) | embedded wherever a user is referenced |
-| `FacilityFilters` (`search`, `include_inactive`) | F1, F11, F16 |
+| `UserSummary` (`{id, full_name, role}` — no email) | embedded wherever a user is referenced |
+| `BuildingFilters`, `FloorFilters`, `SeatFilters`, `CategoryFilters` | F1, F6, F11, F16 |
 | `FloorUpdate`, `SeatUpdate`, `CategoryUpdate` | F9, F14, F19 |
-| `EngineerProfileOut`, `EngineerProfileUpdate`, `EngineerFilters` | F21–F23 |
+| `EngineerOut` (profile + user + `open_assignments`), `EngineerProfileUpdate`, `EngineerFilters` | F21–F23 |
 | `IncidentDetailOut`, `TransitionOption` | I3 |
-| `WorkflowOut` | I7 |
+| `WorkflowOut`, `WorkflowTransitionOut` (`from` on the wire) | I7 |
 | `EscalationCreate`, `EscalationDecision`, `EscalationOut`, `EscalationFilters` | I11–I14 |
-| `ReportRange`, `SummaryReport`, `SlaReport`, `VolumeReport` | I15–I17 |
+| `ReportRange`, `SlaParams`, `VolumeParams` (`from`/`to` on the wire) | I15–I17 |
+| `SummaryReport`, `SlaReport`, `VolumeReport`, `CountBucket`, `SlaRow`, `SlaTarget`, `VolumeRow` | I15–I17 |
+
+SLA targets and the report range bounds live in `acme_core/reporting.py`, not in a schema. `IncidentNote`,
+`IncidentStatusHistory` and `EscalationRequest` gained the `author`, `actor`, `requested_by` and
+`decided_by` relationships the summaries load from — ORM-only, no migration.
 
 **Changed**
 
@@ -617,7 +623,8 @@ exempts it explicitly.
 | `NoteOut` | embed `author` | same |
 | `StatusHistoryOut` | embed `actor` | same |
 | `IncidentFilters` | add `category_id` | I2 |
-| every `*Update` | reject explicit `null` on required fields | §1.4 partial-update rule |
+| every `*Update` | now an `UpdateModel`: explicit `null` is refused unless the field is in `CLEARABLE` | §1.4 partial-update rule |
+| `BuildingUpdate`, `IncidentUpdate` | moved onto `UpdateModel`; `address` / `category_id`, `assignee_id` clearable | same |
 
 Facility references on an incident stay as ids: facilities are readable by everyone, so the client
 resolves them from a cached lookup instead of every incident row repeating building and floor names.

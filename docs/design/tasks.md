@@ -13,14 +13,14 @@ are placed in the phase where they belong.
 | Phase | Scope | Done |
 |---|---|---|
 | 0 | Tooling foundation | 5 / 5 |
-| 1 | `acme_core` shared kernel | 29 / 30 |
+| 1 | `acme_core` shared kernel | 30 / 30 |
 | 2 | `auth` service | 0 / 15 |
 | 3 | `incidents` service | 0 / 16 |
 | 4 | `facilities` service | 0 / 10 |
 | 5 | Frontend | 0 / 24 |
 | 6 | Cloud, CI and operations | 0 / 12 |
 | 7 | Documentation and handover | 0 / 7 |
-| | **Total** | **34 / 119** |
+| | **Total** | **35 / 119** |
 
 ---
 
@@ -32,7 +32,7 @@ are placed in the phase where they belong.
 - [x] **T4** `Makefile` with 16 targets; `deploy` depends on `sync` + `verify-sync`.
 - [x] **T5** `backend/auth` stub, `.gitignore`, `pyrightconfig.json` excluding vendored copies.
 
-## Phase 1 — `acme_core` shared kernel
+## Phase 1 — `acme_core` shared kernel ✅
 
 - [x] **T6** `config.py` — `Settings`, single `in_lambda()` discriminator, URL builder, password masking.
 - [x] **T7** `db/engine.py` — locked lazy engine, `pool_size=1`, `pre_ping`, `get_db()`, `dispose_engine()`.
@@ -63,7 +63,7 @@ are placed in the phase where they belong.
 - [x] **T32** `schemas/` — `StrictModel` (`extra="forbid"`), auth, facility, incident schemas; `Page[T]` for pagination.
 - [x] **T33** Schema tests — `@acme.inc` gate incl. `…@acme.inc.evil.com`, case, whitespace; `role` in body; **no request schema contains a server-controlled field**.
 - [x] **T34** `lambda_entry.py` — pure `classify(event)`; positive `source` marker, no HTTP keys, allowlisted action, fail closed. *(76 tests, 100%)*
-- [ ] **T118** Schema changes from [`api.md` §6](api.md#6-schema-changes-this-design-needs) — **before T35**. `UserSummary` embedded as `reporter`/`assignee`/`author`/`actor` (loaded with `selectinload`, no N+1); `MeOut`, `ChangePasswordRequest`, `UserFilters`; `AdminCreateUserRequest` gets the `@acme.inc` check and `specialty` required iff Engineer; `AdminUpdateUserRequest` gets `specialty`; facility `*Update` schemas; engineer-profile, escalation (`decision`, never `status`), workflow, detail and report schemas; every `*Update` rejects explicit `null` on required fields.
+- [x] **T118** Schema changes from [`api.md` §6](api.md#6-schema-changes-this-design-needs) — **before T35**. `UserSummary` embedded as `reporter`/`assignee`/`author`/`actor` (loaded with `selectinload`, no N+1); `MeOut`, `ChangePasswordRequest`, `UserFilters`; `AdminCreateUserRequest` gets the `@acme.inc` check and `specialty` required iff Engineer; `AdminUpdateUserRequest` gets `specialty`; facility `*Update` schemas; engineer-profile, escalation (`decision`, never `status`), workflow, detail and report schemas; every `*Update` rejects explicit `null` on required fields. *(95 tests, 100%)*
 
 ## Phase 2 — `auth` service
 
