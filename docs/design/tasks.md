@@ -15,7 +15,7 @@ are placed in the phase where they belong.
 | 0 | Tooling foundation | 6 / 6 |
 | 1 | `acme_core` shared kernel | 30 / 30 |
 | 2 | `auth` service | 16 / 16 |
-| 3 | `incidents` service | 15 / 16 |
+| 3 | `incidents` service | 16 / 17 |
 | 4 | `facilities` service | 9 / 10 |
 | 5 | Frontend | 21 / 24 |
 | 6 | Cloud, CI and operations | 3 / 14 |
@@ -103,6 +103,7 @@ are placed in the phase where they belong.
 - [x] **T62** Transition integration tests — each legal edge end to end, plus history rows and stamp values. Includes the full **admin-triage journey**: employee reports → admin assigns while Open → the engineer (who could not see it before) now can, and starts work *(api.md §4)*. *(the five-step order of checks is pinned one test per step)*
 - [x] **T63** Filter/pagination tests incl. sort allowlist rejection.
 - [ ] **T64** Deploy and smoke-test the service.
+- [x] **T125** In-app notifications — an engineer is told when an incident is assigned to them, every active admin when one is reported *(api.md I20–I22, D9)*. *(`notifications` table, migration `c49f04286e46`; rows written in the same transaction as the report or the assignment, by `PUT` and by transition alike, only on a real change of hands and never to the actor themselves; the recipient is the only reader, structurally, so another user's row is 404. `NotificationPage` carries `unread_count` so the badge and the list are one round trip. Frontend: `components/NotificationBell.jsx` in the app bar for staff only, polling once a minute while visible and on focus, a menu that phrases each row and marks it read on the way to the incident, "Mark all as read". 14 backend tests, 12 frontend tests)*
 
 ## Phase 4 — `facilities` service
 

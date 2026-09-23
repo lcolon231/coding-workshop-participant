@@ -67,6 +67,11 @@ from acme_core.schemas.incident import (
     WorkflowOut,
     WorkflowTransitionOut,
 )
+from acme_core.schemas.notification import (
+    NotificationFilters,
+    NotificationOut,
+    NotificationPage,
+)
 from acme_core.schemas.report import (
     BuildingRow,
     BuildingsReport,
@@ -125,6 +130,9 @@ __all__ = [
     "MeOut",
     "NoteCreate",
     "NoteOut",
+    "NotificationFilters",
+    "NotificationOut",
+    "NotificationPage",
     "Page",
     "PageParams",
     "RefreshRequest",

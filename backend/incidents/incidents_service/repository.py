@@ -34,6 +34,8 @@ from acme_core.models import (
     IncidentNote,
     IncidentStatus,
     IncidentStatusHistory,
+    Notification,
+    NotificationKind,
     Priority,
     Role,
     Seat,
@@ -43,6 +45,7 @@ from acme_core.pagination import like_pattern, paginate
 from acme_core.reporting import SLA_TARGETS
 from acme_core.schemas.common import TimelineParams
 from acme_core.schemas.incident import EscalationFilters, IncidentFilters
+from acme_core.schemas.notification import NotificationFilters
 from acme_core.schemas.report import ReportRange, SlaParams, VolumeParams
 from acme_core.scoping import scope_incidents, scope_notes, visible_incident_ids
 from acme_core.security.principal import Principal
@@ -312,6 +315,101 @@ def has_pending_escalation(session: Session, incident_id: uuid.UUID) -> bool:
         EscalationRequest.status == EscalationStatus.PENDING,
     )
     return session.execute(statement.limit(1)).first() is not None
+
+
+# --------------------------------------------------------------------------- notifications
+
+
+def active_admin_ids(session: Session) -> list[uuid.UUID]:
+    """Every active Facility Admin, the audience for a newly reported incident."""
+    return list(
+        session.scalars(
+            select(User.id).where(User.role == Role.FACILITY_ADMIN, User.is_active.is_(True))
+        )
+    )
+
+
+def add_notification(
+    session: Session,
+    *,
+    user_id: uuid.UUID,
+    incident: Incident,
+    kind: NotificationKind,
+    actor_id: uuid.UUID,
+    at: dt.datetime,
+) -> Notification:
+    """Tell one user about one incident. Flushed with the request.
+
+    `at` is explicit for the same reason as `add_history`: `now()` is the
+    transaction start, and the bell lists newest first.
+    """
+    row = Notification(
+        user_id=user_id,
+        incident_id=incident.id,
+        actor_id=actor_id,
+        kind=kind,
+        incident_title=incident.title,
+        created_at=at,
+    )
+    session.add(row)
+    return row
+
+
+def _own_notifications(principal: Principal) -> Select[Any]:
+    """A select over the caller's notifications and nobody else's.
+
+    The recipient filter is applied here, before any caller adds a condition,
+    so no query over this table can reach another user's rows.
+    """
+    return (
+        select(Notification)
+        .options(selectinload(Notification.actor))
+        .where(Notification.user_id == principal.user_id)
+    )
+
+
+def get_notification(
+    session: Session, principal: Principal, notification_id: uuid.UUID
+) -> Notification | None:
+    """Fetch one of the caller's notifications, or None if it is not theirs."""
+    statement = _own_notifications(principal).where(Notification.id == notification_id)
+    return session.execute(statement).scalar_one_or_none()
+
+
+def list_notifications(
+    session: Session, principal: Principal, filters: NotificationFilters
+) -> tuple[list[Notification], int]:
+    """Page through the caller's notifications, newest first."""
+    statement = _own_notifications(principal)
+    if filters.unread:
+        statement = statement.where(Notification.read_at.is_(None))
+    return paginate(
+        session,
+        statement,
+        filters,
+        sort_columns={"created_at": Notification.created_at},
+        sort="created_at",
+        order="desc",
+        tiebreaker=Notification.id,
+    )
+
+
+def count_unread(session: Session, principal: Principal) -> int:
+    """How many of the caller's notifications are still unread."""
+    statement = select(func.count()).select_from(
+        _own_notifications(principal)
+        .options()
+        .where(Notification.read_at.is_(None))
+        .order_by(None)
+        .subquery()
+    )
+    return session.execute(statement).scalar_one()
+
+
+def unread_notifications(session: Session, principal: Principal) -> list[Notification]:
+    """Every unread notification the caller has, to mark them read as ORM rows."""
+    statement = _own_notifications(principal).where(Notification.read_at.is_(None))
+    return list(session.execute(statement).scalars())
 
 
 # --------------------------------------------------------------------------- references

@@ -32,6 +32,7 @@ from acme_core.models import (
     Incident,
     IncidentNote,
     IncidentStatusHistory,
+    Notification,
     Role,
     Seat,
     User,
@@ -208,7 +209,7 @@ class TestRouteContract:
                 resp = incidents_client.request(method.upper(), url, json={})
                 assert resp.status_code == 401, f"{method.upper()} {path} -> {resp.status_code}"
                 checked += 1
-        assert checked == 19, "the protected-route count changed; update this test deliberately"
+        assert checked == 22, "the protected-route count changed; update this test deliberately"
 
     def test_static_paths_are_not_swallowed_by_the_id_route(
         self, incidents_client: TestClient, actors: Actors
@@ -218,6 +219,9 @@ class TestRouteContract:
         assert incidents_client.get(f"{P}/escalations", headers=actors.admin).status_code == 200
         assert (
             incidents_client.get(f"{P}/reports/summary", headers=actors.admin).status_code == 200
+        )
+        assert (
+            incidents_client.get(f"{P}/notifications", headers=actors.employee).status_code == 200
         )
 
 
@@ -1594,3 +1598,260 @@ class TestReports:
             (r["assigned_count"], r["completed_count"], r["mean_resolve_seconds"]) == (0, 0, None)
             for r in body["rows"]
         )
+
+
+# --------------------------------------------------------------------------- notifications
+
+
+def notifications_of(session: Session, user: User) -> list[Notification]:
+    return list(
+        session.scalars(
+            select(Notification)
+            .where(Notification.user_id == user.id)
+            .order_by(Notification.created_at, Notification.id)
+        )
+    )
+
+
+class TestNotifications:
+    """Admins hear about every report; an engineer hears when work lands on them."""
+
+    def test_every_active_admin_is_told_about_a_report(
+        self,
+        api: Api,
+        actors: Actors,
+        world: World,
+        make_user: Any,
+        verify_session: Session,
+    ) -> None:
+        second_admin = make_user(Role.FACILITY_ADMIN, email="admin2@acme.inc")
+        retired_admin = make_user(Role.FACILITY_ADMIN, email="gone@acme.inc", is_active=False)
+        incident = api.report(actors.employee, title="Lift stuck")
+
+        for admin in (world.admin, second_admin):
+            rows = notifications_of(verify_session, admin)
+            assert len(rows) == 1
+            row = rows[0]
+            assert row.kind.value == "Reported"
+            assert str(row.incident_id) == incident["id"]
+            assert row.incident_title == "Lift stuck"
+            assert row.actor_id == world.employee.id
+            assert row.read_at is None
+        assert notifications_of(verify_session, retired_admin) == []
+        # The reporter and the engineers hear nothing about a report.
+        for bystander in (world.employee, world.engineer):
+            assert notifications_of(verify_session, bystander) == []
+
+    def test_an_admin_reporting_is_not_told_about_their_own(
+        self, api: Api, actors: Actors, world: World, verify_session: Session
+    ) -> None:
+        api.report(actors.admin)
+        assert notifications_of(verify_session, world.admin) == []
+
+    def test_assigning_through_edit_tells_the_engineer(
+        self,
+        incidents_client: TestClient,
+        api: Api,
+        actors: Actors,
+        world: World,
+        verify_session: Session,
+    ) -> None:
+        incident = api.report(actors.employee)
+        resp = incidents_client.put(
+            f"{P}/{incident['id']}",
+            json={"assignee_id": str(world.engineer.id)},
+            headers=actors.admin,
+        )
+        assert resp.status_code == 200, resp.text
+
+        rows = notifications_of(verify_session, world.engineer)
+        assert [(r.kind.value, r.actor_id) for r in rows] == [("Assigned", world.admin.id)]
+        assert str(rows[0].incident_id) == incident["id"]
+        assert notifications_of(verify_session, world.other_engineer) == []
+
+    def test_assigning_through_a_transition_tells_the_engineer(
+        self, api: Api, actors: Actors, world: World, verify_session: Session
+    ) -> None:
+        incident = api.in_progress(actors)
+        rows = notifications_of(verify_session, world.engineer)
+        assert [r.kind.value for r in rows] == ["Assigned"]
+        assert str(rows[0].incident_id) == incident["id"]
+
+    def test_reassigning_tells_the_new_engineer_only(
+        self,
+        incidents_client: TestClient,
+        api: Api,
+        actors: Actors,
+        world: World,
+        verify_session: Session,
+    ) -> None:
+        incident = api.in_progress(actors)
+        resp = incidents_client.put(
+            f"{P}/{incident['id']}",
+            json={"assignee_id": str(world.other_engineer.id)},
+            headers=actors.admin,
+        )
+        assert resp.status_code == 200, resp.text
+        assert len(notifications_of(verify_session, world.engineer)) == 1
+        assert [r.kind.value for r in notifications_of(verify_session, world.other_engineer)] == [
+            "Assigned"
+        ]
+
+    def test_saving_the_same_assignee_again_says_nothing_new(
+        self,
+        incidents_client: TestClient,
+        api: Api,
+        actors: Actors,
+        world: World,
+        verify_session: Session,
+    ) -> None:
+        incident = api.in_progress(actors)
+        resp = incidents_client.put(
+            f"{P}/{incident['id']}",
+            json={"assignee_id": str(world.engineer.id), "priority": "High"},
+            headers=actors.admin,
+        )
+        assert resp.status_code == 200, resp.text
+        assert len(notifications_of(verify_session, world.engineer)) == 1
+
+    def test_an_engineer_assigning_themselves_is_not_told(
+        self,
+        incidents_client: TestClient,
+        api: Api,
+        actors: Actors,
+        world: World,
+        verify_session: Session,
+    ) -> None:
+        # An engineer who reported the incident themselves may pick it up;
+        # nobody needs to tell them what they just did.
+        incident = api.report(actors.engineer)
+        api.moved(
+            actors.engineer, incident["id"], "In Progress", assignee_id=str(world.engineer.id)
+        )
+        assert notifications_of(verify_session, world.engineer) == []
+
+    def test_a_failed_assignment_leaves_no_notification(
+        self,
+        incidents_client: TestClient,
+        api: Api,
+        actors: Actors,
+        world: World,
+        verify_session: Session,
+    ) -> None:
+        incident = api.report(actors.employee)
+        resp = incidents_client.put(
+            f"{P}/{incident['id']}",
+            json={"assignee_id": str(world.inactive_engineer.id)},
+            headers=actors.admin,
+        )
+        assert resp.status_code == 400
+        assert notifications_of(verify_session, world.inactive_engineer) == []
+
+    # ---- reading them back
+
+    def test_the_list_is_newest_first_with_the_unread_total(
+        self, incidents_client: TestClient, api: Api, actors: Actors
+    ) -> None:
+        first = api.report(actors.employee, title="First")
+        second = api.report(actors.employee, title="Second")
+
+        body = incidents_client.get(f"{P}/notifications", headers=actors.admin).json()
+        assert body["total"] == 2
+        assert body["unread_count"] == 2
+        assert [n["incident_title"] for n in body["items"]] == ["Second", "First"]
+        assert [n["incident_id"] for n in body["items"]] == [second["id"], first["id"]]
+        item = body["items"][0]
+        assert item["kind"] == "Reported"
+        assert item["read_at"] is None
+        assert item["actor"]["full_name"] == "User 1"
+        assert "email" not in item["actor"]
+
+    def test_only_your_own_are_listed(
+        self, incidents_client: TestClient, api: Api, actors: Actors
+    ) -> None:
+        api.in_progress(actors)
+        engineer = incidents_client.get(f"{P}/notifications", headers=actors.engineer).json()
+        other = incidents_client.get(f"{P}/notifications", headers=actors.other_engineer).json()
+        employee = incidents_client.get(f"{P}/notifications", headers=actors.employee).json()
+        assert [n["kind"] for n in engineer["items"]] == ["Assigned"]
+        assert (other["total"], other["unread_count"]) == (0, 0)
+        assert (employee["total"], employee["unread_count"]) == (0, 0)
+
+    def test_marking_one_read(
+        self, incidents_client: TestClient, api: Api, actors: Actors, verify_session: Session
+    ) -> None:
+        api.report(actors.employee)
+        api.report(actors.employee)
+        listed = incidents_client.get(f"{P}/notifications", headers=actors.admin).json()
+        target = listed["items"][0]["id"]
+
+        resp = incidents_client.post(f"{P}/notifications/{target}/read", headers=actors.admin)
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["read_at"] is not None
+        # Idempotent: reading it again keeps the first instant (the two
+        # answers may render it in different zones, so compare parsed).
+        again = incidents_client.post(f"{P}/notifications/{target}/read", headers=actors.admin)
+        assert dt.datetime.fromisoformat(again.json()["read_at"]) == dt.datetime.fromisoformat(
+            resp.json()["read_at"]
+        )
+
+        row = verify_session.get(Notification, uuid.UUID(target), populate_existing=True)
+        assert row is not None and row.read_at is not None
+        body = incidents_client.get(f"{P}/notifications", headers=actors.admin).json()
+        assert (body["total"], body["unread_count"]) == (2, 1)
+        unread = incidents_client.get(
+            f"{P}/notifications", params={"unread": "true"}, headers=actors.admin
+        ).json()
+        assert [n["id"] for n in unread["items"]] == [listed["items"][1]["id"]]
+        assert unread["total"] == 1
+
+    def test_someone_elses_notification_is_404_not_403(
+        self, incidents_client: TestClient, api: Api, actors: Actors
+    ) -> None:
+        api.report(actors.employee)
+        target = incidents_client.get(f"{P}/notifications", headers=actors.admin).json()["items"][
+            0
+        ]["id"]
+        for stranger in (actors.engineer, actors.employee):
+            resp = incidents_client.post(f"{P}/notifications/{target}/read", headers=stranger)
+            assert resp.status_code == 404, resp.text
+        assert (
+            incidents_client.post(f"{P}/notifications/{NIL}/read", headers=actors.admin).status_code
+            == 404
+        )
+
+    def test_marking_all_read(
+        self, incidents_client: TestClient, api: Api, actors: Actors, verify_session: Session
+    ) -> None:
+        api.report(actors.employee)
+        api.report(actors.employee)
+        api.in_progress(actors)  # the engineer's, untouched by the admin's read-all
+
+        resp = incidents_client.post(f"{P}/notifications/read-all", headers=actors.admin)
+        assert resp.status_code == 204
+        body = incidents_client.get(f"{P}/notifications", headers=actors.admin).json()
+        assert body["unread_count"] == 0
+        assert all(n["read_at"] is not None for n in body["items"])
+        engineer = incidents_client.get(f"{P}/notifications", headers=actors.engineer).json()
+        assert engineer["unread_count"] == 1
+        # Nothing to do is still a 204.
+        assert (
+            incidents_client.post(f"{P}/notifications/read-all", headers=actors.admin).status_code
+            == 204
+        )
+
+    def test_deleting_the_incident_removes_its_notifications(
+        self,
+        incidents_client: TestClient,
+        api: Api,
+        actors: Actors,
+        world: World,
+        verify_session: Session,
+    ) -> None:
+        incident = api.in_progress(actors)
+        assert len(notifications_of(verify_session, world.engineer)) == 1
+        resp = incidents_client.delete(f"{P}/{incident['id']}", headers=actors.admin)
+        assert resp.status_code == 204
+        verify_session.expire_all()
+        assert notifications_of(verify_session, world.engineer) == []
+        assert notifications_of(verify_session, world.admin) == []

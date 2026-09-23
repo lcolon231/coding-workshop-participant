@@ -62,8 +62,9 @@ class TestConstraints:
                 "WHERE n.nspname = 'public' AND c.contype = 'c'"
             )
         ).scalar_one()
-        # role, status, priority, visibility, escalation status, from_status, to_status
-        assert count == 7
+        # role, status, priority, visibility, escalation status, from_status,
+        # to_status, notification kind
+        assert count == 8
 
     def test_no_naive_timestamp_columns(self, connection: Connection) -> None:
         """Mixing naive and aware timestamps makes SLA arithmetic wrong."""

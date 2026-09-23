@@ -29,6 +29,8 @@ from acme_core.models import (
     IncidentStatus,
     IncidentStatusHistory,
     NoteVisibility,
+    Notification,
+    NotificationKind,
     Priority,
     Role,
     User,
@@ -46,6 +48,7 @@ from acme_core.schemas.incident import (
     TransitionOption,
     TransitionRequest,
 )
+from acme_core.schemas.notification import NotificationFilters
 from acme_core.schemas.report import (
     BuildingRow,
     BuildingsReport,
@@ -172,6 +175,102 @@ def _raise_if(details: list[dict[str, str]]) -> None:
         raise ValidationFailed("Request validation failed.", details=details)
 
 
+# --------------------------------------------------------------------------- notifications
+
+
+def _notify_admins_of_report(
+    session: Session, principal: Principal, incident: Incident, at: dt.datetime
+) -> None:
+    """Tell every active Facility Admin that an incident was filed.
+
+    An admin who files their own incident already knows, so they are skipped.
+    """
+    for admin_id in repo.active_admin_ids(session):
+        if admin_id == principal.user_id:
+            continue
+        repo.add_notification(
+            session,
+            user_id=admin_id,
+            incident=incident,
+            kind=NotificationKind.REPORTED,
+            actor_id=principal.user_id,
+            at=at,
+        )
+
+
+def _notify_assignee(
+    session: Session,
+    principal: Principal,
+    incident: Incident,
+    previous_assignee_id: uuid.UUID | None,
+    at: dt.datetime,
+) -> None:
+    """Tell the engineer an incident was just handed to.
+
+    Only on an actual change of hands: re-saving the same assignee says
+    nothing new, and an engineer who picked the work up themselves is not
+    told what they just did.
+    """
+    assignee_id = incident.assignee_id
+    if assignee_id is None or assignee_id == previous_assignee_id:
+        return
+    if assignee_id == principal.user_id:
+        return
+    repo.add_notification(
+        session,
+        user_id=assignee_id,
+        incident=incident,
+        kind=NotificationKind.ASSIGNED,
+        actor_id=principal.user_id,
+        at=at,
+    )
+
+
+def list_notifications(
+    session: Session, principal: Principal, filters: NotificationFilters
+) -> tuple[list[Notification], int, int]:
+    """Page through the caller's notifications, with their unread total.
+
+    Returns:
+        The page, the total matching the filter, and the unread count over
+        every notification the caller has (not only the page, not only the
+        filter), which is what the badge shows.
+    """
+    rows, total = repo.list_notifications(session, principal, filters)
+    return rows, total, repo.count_unread(session, principal)
+
+
+def mark_notification_read(
+    session: Session, principal: Principal, notification_id: uuid.UUID
+) -> Notification:
+    """Mark one of the caller's notifications read. Idempotent.
+
+    Raises:
+        NotFound: No such notification, or it belongs to someone else.
+    """
+    notification = repo.get_notification(session, principal, notification_id)
+    if notification is None:
+        raise NotFound("Notification not found.")
+    if notification.read_at is None:
+        notification.read_at = _now()
+        session.flush()
+    return notification
+
+
+def mark_all_notifications_read(session: Session, principal: Principal) -> int:
+    """Mark every unread notification the caller has as read.
+
+    Returns:
+        How many were unread.
+    """
+    rows = repo.unread_notifications(session, principal)
+    now = _now()
+    for row in rows:
+        row.read_at = now
+    session.flush()
+    return len(rows)
+
+
 # --------------------------------------------------------------------------- incidents
 
 
@@ -207,9 +306,9 @@ def create_incident(session: Session, principal: Principal, body: IncidentCreate
     )
     session.add(incident)
     session.flush()
-    repo.add_history(
-        session, incident, None, IncidentStatus.OPEN, principal.user_id, None, at=_now()
-    )
+    now = _now()
+    repo.add_history(session, incident, None, IncidentStatus.OPEN, principal.user_id, None, at=now)
+    _notify_admins_of_report(session, principal, incident, now)
     session.flush()
     _logger.info("incident_created", extra={"incident_id": str(incident.id)})
     return incident
@@ -296,6 +395,7 @@ def update_incident(
 
     if changes.get("category_id") is not None:
         _raise_if(_check_category(session, changes["category_id"]))
+    previous_assignee_id = incident.assignee_id
     if "assignee_id" in changes:
         if changes["assignee_id"] is None:
             if incident.status is not IncidentStatus.OPEN:
@@ -308,6 +408,8 @@ def update_incident(
 
     for field, value in changes.items():
         setattr(incident, field, value)
+    session.flush()
+    _notify_assignee(session, principal, incident, previous_assignee_id, _now())
     session.flush()
     return incident
 
@@ -347,6 +449,7 @@ def transition(
     incident = _require(session, principal, incident_id, for_update=True)
     payload = body.model_dump(exclude_unset=True, exclude={"target_status"})
     validate_transition(_context(principal, incident), body.target_status, payload)
+    previous_assignee_id = incident.assignee_id
 
     if body.assignee_id is not None:
         if principal.role is Role.ENGINEER and body.assignee_id != principal.user_id:
@@ -373,6 +476,8 @@ def transition(
     note = body.resolution_note or body.blocked_reason
     repo.add_history(session, incident, incident.status, target, principal.user_id, note, at=now)
     incident.status = target
+    session.flush()
+    _notify_assignee(session, principal, incident, previous_assignee_id, now)
     session.flush()
     _logger.info(
         "incident_transitioned",
