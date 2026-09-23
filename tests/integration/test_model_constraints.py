@@ -233,8 +233,11 @@ class TestDeletePolicy:
             Incident(title="t", description="d", reporter_id=user.id, building_id=building.id)
         )
         db_session.flush()
-        # RestrictViolation surfaces on execute, not on the later flush.
-        with pytest.raises(IntegrityError, match="RESTRICT"):
+        # The violation surfaces on execute, not on the later flush. Match the
+        # constraint name, not the wording: PostgreSQL 18 raises RestrictViolation
+        # ("violates RESTRICT setting"), while 17 -- Aurora and the CI container --
+        # raises the generic ForeignKeyViolation, which never says RESTRICT.
+        with pytest.raises(IntegrityError, match="fk_incidents_reporter_id_users"):
             db_session.execute(User.__table__.delete().where(User.id == user.id))
 
     def test_notes_cascade_with_their_incident(self, db_session: Session) -> None:
