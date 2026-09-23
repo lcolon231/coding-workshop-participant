@@ -177,6 +177,10 @@ class Api:
         body = {"building_id": str(self.world.hq.id), "level": 3, **overrides}
         return self._create("floors", headers, body)
 
+    def seat(self, headers: dict[str, str], **overrides: Any) -> dict[str, Any]:
+        body = {"floor_id": str(self.world.ground.id), "code": "1-03", **overrides}
+        return self._create("seats", headers, body)
+
 
 @pytest.fixture
 def api(facilities_client: TestClient, world: World) -> Api:
@@ -199,7 +203,7 @@ def stored(session: Session, model: type, row_id: Any) -> Any:
 
 class TestRouteContract:
     PUBLIC = {("GET", f"{P}/healthz"), ("GET", f"{P}/readyz")}
-    PROTECTED_ROUTES = 10
+    PROTECTED_ROUTES = 15
 
     def test_every_other_route_rejects_an_anonymous_caller(
         self, facilities_client: TestClient
@@ -660,4 +664,219 @@ class TestFloorDelete:
         self, facilities_client: TestClient, actors: Actors
     ) -> None:
         resp = facilities_client.delete(f"{P}/floors/{uuid.uuid4()}", headers=actors.admin)
+        assert resp.status_code == 404
+
+
+# --------------------------------------------------------------------------- seats
+
+
+class TestSeatList:
+    def test_non_admins_see_active_seats_in_code_order(
+        self, facilities_client: TestClient, actors: Actors, api: Api, world: World
+    ) -> None:
+        api.seat(actors.admin, code="1-00")
+        page = facilities_client.get(f"{P}/floors/{world.ground.id}/seats", headers=actors.employee)
+        assert [s["code"] for s in page.json()["items"]] == ["1-00", "1-01"]
+        assert page.json()["total"] == 2
+
+    def test_include_inactive_is_honoured_for_admins_only(
+        self, facilities_client: TestClient, actors: Actors, world: World
+    ) -> None:
+        url = f"{P}/floors/{world.ground.id}/seats"
+        params = {"include_inactive": "true"}
+        mine = facilities_client.get(url, params=params, headers=actors.employee).json()
+        theirs = facilities_client.get(url, params=params, headers=actors.admin).json()
+        assert ([s["code"] for s in mine["items"]], mine["total"]) == (["1-01"], 1)
+        assert ([s["code"] for s in theirs["items"]], theirs["total"]) == (["1-01", "1-02"], 2)
+
+    def test_search_matches_code_or_label_and_sort_by_label(
+        self, facilities_client: TestClient, actors: Actors, api: Api, world: World
+    ) -> None:
+        api.seat(actors.admin, code="1-03", label="Aisle")
+        url = f"{P}/floors/{world.ground.id}/seats"
+        found = facilities_client.get(url, params={"search": "wind"}, headers=actors.employee)
+        assert [s["code"] for s in found.json()["items"]] == ["1-01"]
+        by_label = facilities_client.get(
+            url, params={"sort": "label", "order": "desc"}, headers=actors.employee
+        )
+        assert [s["label"] for s in by_label.json()["items"]] == ["Window", "Aisle"]
+
+    def test_a_floor_in_a_retired_building_is_for_admins_only(
+        self, facilities_client: TestClient, actors: Actors, world: World
+    ) -> None:
+        url = f"{P}/floors/{world.old_floor.id}/seats"
+        assert facilities_client.get(url, headers=actors.employee).status_code == 404
+        page = facilities_client.get(url, headers=actors.admin).json()
+        assert [s["code"] for s in page["items"]] == ["1-01"]
+
+    def test_an_unknown_floor_is_not_found(
+        self, facilities_client: TestClient, actors: Actors
+    ) -> None:
+        resp = facilities_client.get(f"{P}/floors/{uuid.uuid4()}/seats", headers=actors.admin)
+        assert resp.status_code == 404
+
+
+class TestSeatGet:
+    @pytest.mark.parametrize("which", ["retired_seat", "old_seat"])
+    def test_the_404_200_pair_on_a_seat_nobody_should_be_offered(
+        self, facilities_client: TestClient, actors: Actors, world: World, which: str
+    ) -> None:
+        """A retired seat, and an active seat in a retired building, look alike to an employee."""
+        url = f"{P}/seats/{getattr(world, which).id}"
+        hidden = facilities_client.get(url, headers=actors.employee)
+        assert (hidden.status_code, hidden.json()["error"]) == (404, "not_found")
+        assert facilities_client.get(url, headers=actors.admin).status_code == 200
+
+    def test_returns_the_seat(
+        self, facilities_client: TestClient, actors: Actors, world: World
+    ) -> None:
+        body = facilities_client.get(f"{P}/seats/{world.seat.id}", headers=actors.engineer)
+        assert body.json() == {
+            "id": str(world.seat.id),
+            "floor_id": str(world.ground.id),
+            "code": "1-01",
+            "label": "Window",
+            "is_active": True,
+        }
+
+
+class TestSeatCreate:
+    def test_creates_and_points_at_the_new_row(
+        self, facilities_client: TestClient, actors: Actors, world: World, verify_session: Session
+    ) -> None:
+        resp = facilities_client.post(
+            f"{P}/seats",
+            json={"floor_id": str(world.ground.id), "code": "1-03", "label": "Corner"},
+            headers=actors.admin,
+        )
+        assert resp.status_code == 201, resp.text
+        assert resp.headers["Location"] == f"{P}/seats/{resp.json()['id']}"
+        row = stored(verify_session, Seat, resp.json()["id"])
+        assert (row.floor_id, row.code, row.label, row.is_active) == (
+            world.ground.id,
+            "1-03",
+            "Corner",
+            True,
+        )
+
+    def test_the_same_code_on_another_floor_is_fine(
+        self, facilities_client: TestClient, actors: Actors, api: Api, world: World
+    ) -> None:
+        created = api.seat(actors.admin, floor_id=str(world.second.id), code="1-01")
+        assert created["floor_id"] == str(world.second.id)
+
+    def test_an_unknown_floor_is_a_validation_error_on_the_field(
+        self, facilities_client: TestClient, actors: Actors
+    ) -> None:
+        resp = facilities_client.post(
+            f"{P}/seats", json={"floor_id": str(uuid.uuid4()), "code": "X"}, headers=actors.admin
+        )
+        assert (resp.status_code, resp.json()["error"]) == (400, "validation_error")
+        assert [d["field"] for d in resp.json()["details"]] == ["floor_id"]
+
+    def test_a_duplicate_code_is_a_conflict(
+        self, facilities_client: TestClient, actors: Actors, world: World
+    ) -> None:
+        resp = facilities_client.post(
+            f"{P}/seats",
+            json={"floor_id": str(world.ground.id), "code": "1-01"},
+            headers=actors.admin,
+        )
+        assert (resp.status_code, resp.json()["error"]) == (409, "conflict")
+
+    def test_non_admins_are_refused(
+        self, facilities_client: TestClient, actors: Actors, world: World
+    ) -> None:
+        resp = facilities_client.post(
+            f"{P}/seats",
+            json={"floor_id": str(world.ground.id), "code": "9"},
+            headers=actors.employee,
+        )
+        assert resp.status_code == 403
+
+
+class TestSeatUpdate:
+    def test_changes_code_and_clears_label(
+        self, facilities_client: TestClient, actors: Actors, world: World, verify_session: Session
+    ) -> None:
+        url = f"{P}/seats/{world.seat.id}"
+        resp = facilities_client.put(
+            url, json={"code": "1-01A", "label": None}, headers=actors.admin
+        )
+        assert resp.status_code == 200, resp.text
+        row = stored(verify_session, Seat, world.seat.id)
+        assert (row.code, row.label) == ("1-01A", None)
+
+    def test_renaming_onto_an_existing_code_is_a_conflict(
+        self, facilities_client: TestClient, actors: Actors, world: World
+    ) -> None:
+        resp = facilities_client.put(
+            f"{P}/seats/{world.seat.id}", json={"code": "1-02"}, headers=actors.admin
+        )
+        assert (resp.status_code, resp.json()["error"]) == (409, "conflict")
+
+    def test_a_required_field_cannot_be_nulled(
+        self, facilities_client: TestClient, actors: Actors, world: World
+    ) -> None:
+        resp = facilities_client.put(
+            f"{P}/seats/{world.seat.id}", json={"code": None}, headers=actors.admin
+        )
+        assert resp.status_code == 400
+
+    def test_deactivating_hides_it_from_non_admins(
+        self, facilities_client: TestClient, actors: Actors, world: World
+    ) -> None:
+        url = f"{P}/seats/{world.seat.id}"
+        resp = facilities_client.put(url, json={"is_active": False}, headers=actors.admin)
+        assert resp.json()["is_active"] is False
+        assert facilities_client.get(url, headers=actors.employee).status_code == 404
+        listed = facilities_client.get(
+            f"{P}/floors/{world.ground.id}/seats", headers=actors.employee
+        )
+        assert listed.json()["items"] == []
+
+    def test_an_unknown_seat_is_not_found(
+        self, facilities_client: TestClient, actors: Actors
+    ) -> None:
+        resp = facilities_client.put(
+            f"{P}/seats/{uuid.uuid4()}", json={"code": "Z"}, headers=actors.admin
+        )
+        assert resp.status_code == 404
+
+
+class TestSeatDelete:
+    def test_an_unused_seat_is_deleted(
+        self, facilities_client: TestClient, actors: Actors, world: World, verify_session: Session
+    ) -> None:
+        resp = facilities_client.delete(f"{P}/seats/{world.retired_seat.id}", headers=actors.admin)
+        assert resp.status_code == 204
+        assert stored(verify_session, Seat, world.retired_seat.id) is None
+
+    def test_a_seat_named_by_an_incident_is_refused_and_the_incident_keeps_it(
+        self,
+        facilities_client: TestClient,
+        actors: Actors,
+        world: World,
+        make_incident: Any,
+        verify_session: Session,
+    ) -> None:
+        """The FK is SET NULL, so only this check stands between the delete and a lost location."""
+        seat_id = world.seat.id
+        incident_id = make_incident(floor_id=world.ground.id, seat_id=seat_id).id
+        resp = facilities_client.delete(f"{P}/seats/{seat_id}", headers=actors.admin)
+        assert (resp.status_code, resp.json()["error"]) == (409, "conflict")
+        assert resp.json()["message"] == "Seat is referenced by 1 incident; deactivate it instead."
+        assert stored(verify_session, Seat, seat_id) is not None
+        assert stored(verify_session, Incident, incident_id).seat_id == seat_id
+
+    def test_a_non_admin_is_refused_before_the_lookup(
+        self, facilities_client: TestClient, actors: Actors
+    ) -> None:
+        resp = facilities_client.delete(f"{P}/seats/{uuid.uuid4()}", headers=actors.engineer)
+        assert resp.status_code == 403
+
+    def test_an_unknown_seat_is_not_found(
+        self, facilities_client: TestClient, actors: Actors
+    ) -> None:
+        resp = facilities_client.delete(f"{P}/seats/{uuid.uuid4()}", headers=actors.admin)
         assert resp.status_code == 404

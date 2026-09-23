@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 
 from acme_core.models import Building, Floor, Incident, Seat
 from acme_core.pagination import like_pattern, paginate
-from acme_core.schemas.facility import BuildingFilters, FloorFilters
+from acme_core.schemas.facility import BuildingFilters, FloorFilters, SeatFilters
 
 _BUILDING_SORTS: Mapping[str, ColumnElement[Any]] = {
     "code": Building.code,
@@ -31,6 +31,7 @@ _BUILDING_SORTS: Mapping[str, ColumnElement[Any]] = {
     "created_at": Building.created_at,
 }
 _FLOOR_SORTS: Mapping[str, ColumnElement[Any]] = {"level": Floor.level, "name": Floor.name}
+_SEAT_SORTS: Mapping[str, ColumnElement[Any]] = {"code": Seat.code, "label": Seat.label}
 
 
 def _matches(columns: Iterable[ColumnElement[Any]], term: str) -> ColumnElement[bool]:
@@ -161,3 +162,49 @@ def count_seats(session: Session, floor_id: uuid.UUID) -> int:
 def count_incidents_on_floor(session: Session, floor_id: uuid.UUID) -> int:
     """How many incidents, in any status, name this floor."""
     return _count_incidents(session, Incident.floor_id == floor_id)
+
+
+# --------------------------------------------------------------------------- seats
+
+
+def _seats(*, include_inactive: bool) -> Select[Any]:
+    """A select over seats, narrowed to active seats in active buildings unless told otherwise."""
+    statement = select(Seat).join(Floor).join(Building)
+    if not include_inactive:
+        statement = statement.where(Seat.is_active.is_(True), Building.is_active.is_(True))
+    return statement
+
+
+def list_seats(
+    session: Session, floor_id: uuid.UUID, filters: SeatFilters, *, include_inactive: bool
+) -> tuple[list[Seat], int]:
+    """Page through one floor's seats. The service has already checked the floor."""
+    statement = select(Seat).where(Seat.floor_id == floor_id)
+    if not include_inactive:
+        statement = statement.where(Seat.is_active.is_(True))
+    if filters.search:
+        statement = statement.where(_matches((Seat.code, Seat.label), filters.search))
+    return paginate(
+        session,
+        statement,
+        filters,
+        sort_columns=_SEAT_SORTS,
+        sort=filters.sort,
+        order=filters.order,
+        tiebreaker=Seat.id,
+    )
+
+
+def get_seat(
+    session: Session, seat_id: uuid.UUID, *, include_inactive: bool, for_update: bool = False
+) -> Seat | None:
+    """Fetch one seat the caller may see, optionally locked for the transaction."""
+    statement = _seats(include_inactive=include_inactive).where(Seat.id == seat_id)
+    if for_update:
+        statement = statement.with_for_update(of=Seat)
+    return session.execute(statement).scalar_one_or_none()
+
+
+def count_incidents_at_seat(session: Session, seat_id: uuid.UUID) -> int:
+    """How many incidents, in any status, name this seat."""
+    return _count_incidents(session, Incident.seat_id == seat_id)

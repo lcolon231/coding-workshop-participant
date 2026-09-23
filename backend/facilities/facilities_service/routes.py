@@ -32,6 +32,10 @@ from acme_core.schemas.facility import (
     FloorFilters,
     FloorOut,
     FloorUpdate,
+    SeatCreate,
+    SeatFilters,
+    SeatOut,
+    SeatUpdate,
 )
 from facilities_service import service
 
@@ -200,4 +204,81 @@ def update_floor(
 def delete_floor(floor_id: uuid.UUID, admin: AdminPrincipal, session: DbSession) -> Response:
     """Refused while the floor has seats or incidents name it."""
     service.delete_floor(session, admin, floor_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# --------------------------------------------------------------------------- seats
+
+
+@router.get(
+    "/floors/{floor_id}/seats",
+    response_model=Page[SeatOut],
+    responses=error_responses(400, 401, 404),
+    tags=["seats"],
+    summary="A floor's seats",
+)
+def list_seats(
+    floor_id: uuid.UUID,
+    caller: CurrentPrincipal,
+    session: DbSession,
+    filters: Annotated[SeatFilters, Query()],
+) -> Page[SeatOut]:
+    """Active seats of one floor; an admin may ask for retired ones too."""
+    rows, total = service.list_seats(session, caller, floor_id, filters)
+    return _page(SeatOut, rows, total, filters)
+
+
+@router.post(
+    "/seats",
+    status_code=status.HTTP_201_CREATED,
+    response_model=SeatOut,
+    responses=error_responses(400, 401, 403, 409),
+    tags=["seats"],
+    summary="Create a seat",
+)
+def create_seat(
+    body: SeatCreate, _admin: AdminPrincipal, session: DbSession, response: Response
+) -> SeatOut:
+    """Add a seat. Codes repeat between floors but not within one."""
+    seat = service.create_seat(session, body)
+    response.headers["Location"] = f"{PREFIX}/seats/{seat.id}"
+    return SeatOut.model_validate(seat)
+
+
+@router.get(
+    "/seats/{seat_id}",
+    response_model=SeatOut,
+    responses=error_responses(401, 404),
+    tags=["seats"],
+    summary="One seat",
+)
+def get_seat(seat_id: uuid.UUID, caller: CurrentPrincipal, session: DbSession) -> SeatOut:
+    """A seat; retired ones, and those in retired buildings, are visible to admins only."""
+    return SeatOut.model_validate(service.get_seat(session, caller, seat_id))
+
+
+@router.put(
+    "/seats/{seat_id}",
+    response_model=SeatOut,
+    responses=error_responses(400, 401, 403, 404, 409),
+    tags=["seats"],
+    summary="Update a seat",
+)
+def update_seat(
+    seat_id: uuid.UUID, body: SeatUpdate, admin: AdminPrincipal, session: DbSession
+) -> SeatOut:
+    """Partial update of code, label or active flag. Moving a seat is not supported."""
+    return SeatOut.model_validate(service.update_seat(session, admin, seat_id, body))
+
+
+@router.delete(
+    "/seats/{seat_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses=error_responses(401, 403, 404, 409),
+    tags=["seats"],
+    summary="Delete an unused seat",
+)
+def delete_seat(seat_id: uuid.UUID, admin: AdminPrincipal, session: DbSession) -> Response:
+    """Refused while incidents name the seat; deactivate it instead."""
+    service.delete_seat(session, admin, seat_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

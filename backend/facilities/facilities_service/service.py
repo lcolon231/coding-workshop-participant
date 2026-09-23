@@ -26,7 +26,7 @@ from sqlalchemy.orm import Session
 
 from acme_core.exceptions import Conflict, NotFound, ValidationFailed
 from acme_core.logging_config import get_logger
-from acme_core.models import Building, Floor
+from acme_core.models import Building, Floor, Seat
 from acme_core.schemas.common import UpdateModel
 from acme_core.schemas.facility import (
     BuildingCreate,
@@ -35,6 +35,9 @@ from acme_core.schemas.facility import (
     FloorCreate,
     FloorFilters,
     FloorUpdate,
+    SeatCreate,
+    SeatFilters,
+    SeatUpdate,
 )
 from acme_core.security.principal import Principal
 from facilities_service import repository as repo
@@ -252,3 +255,96 @@ def delete_floor(session: Session, principal: Principal, floor_id: uuid.UUID) ->
     session.delete(floor)
     _flush_or_conflict(session, "Floor is still referenced and cannot be deleted.")
     _logger.info("floor_deleted", extra={"floor_id": str(floor_id)})
+
+
+# --------------------------------------------------------------------------- seats
+
+_SEAT_TAKEN = "This floor already has a seat with this code."
+
+
+def _require_seat(
+    session: Session, principal: Principal, seat_id: uuid.UUID, *, for_update: bool = False
+) -> Seat:
+    """Load a seat the caller may see: active, in an active building, unless an admin."""
+    seat = repo.get_seat(
+        session, seat_id, include_inactive=principal.is_admin, for_update=for_update
+    )
+    if seat is None:
+        raise NotFound("Seat not found.")
+    return seat
+
+
+def list_seats(
+    session: Session, principal: Principal, floor_id: uuid.UUID, filters: SeatFilters
+) -> tuple[list[Seat], int]:
+    """Page through a floor's seats.
+
+    Raises:
+        NotFound: No such floor, or its building is retired and the caller is not an admin.
+    """
+    floor = _require_floor(session, principal, floor_id)
+    return repo.list_seats(
+        session, floor.id, filters, include_inactive=_lists_inactive(principal, filters)
+    )
+
+
+def get_seat(session: Session, principal: Principal, seat_id: uuid.UUID) -> Seat:
+    """Fetch one seat.
+
+    Raises:
+        NotFound: No such seat, or it is retired (or its building is) and the
+            caller is not an admin.
+    """
+    return _require_seat(session, principal, seat_id)
+
+
+def create_seat(session: Session, body: SeatCreate) -> Seat:
+    """Add a seat to a floor.
+
+    Raises:
+        ValidationFailed: The floor does not exist.
+        Conflict: The floor already has a seat with this code.
+    """
+    if repo.get_floor(session, body.floor_id, include_inactive=True) is None:
+        raise _missing("floor_id", "Floor does not exist.")
+    seat = Seat(floor_id=body.floor_id, code=body.code, label=body.label)
+    session.add(seat)
+    _flush_or_conflict(session, _SEAT_TAKEN)
+    _logger.info("seat_created", extra={"seat_id": str(seat.id)})
+    return seat
+
+
+def update_seat(
+    session: Session, principal: Principal, seat_id: uuid.UUID, body: SeatUpdate
+) -> Seat:
+    """Apply an admin's edits to a seat. It cannot move to another floor.
+
+    Raises:
+        NotFound: No such seat.
+        Conflict: The new code is already taken on this floor.
+    """
+    seat = _require_seat(session, principal, seat_id, for_update=True)
+    _apply(seat, body)
+    _flush_or_conflict(session, _SEAT_TAKEN)
+    return seat
+
+
+def delete_seat(session: Session, principal: Principal, seat_id: uuid.UUID) -> None:
+    """Delete a seat no incident names.
+
+    The incidents foreign key nulls the seat rather than refusing, so this
+    check is the only guard; deactivation is the normal way to retire a seat.
+
+    Raises:
+        NotFound: No such seat.
+        Conflict: Incidents still name it.
+    """
+    seat = _require_seat(session, principal, seat_id, for_update=True)
+    incidents = repo.count_incidents_at_seat(session, seat.id)
+    if incidents:
+        raise Conflict(
+            f"Seat is referenced by {_plural(incidents, 'incident')}; deactivate it instead."
+        )
+    session.delete(seat)
+    _flush_or_conflict(session, "Seat is still referenced; deactivate it instead.")
+    _logger.info("seat_deleted", extra={"seat_id": str(seat_id)})
