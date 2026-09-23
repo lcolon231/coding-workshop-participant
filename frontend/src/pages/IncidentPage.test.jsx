@@ -109,7 +109,32 @@ describe('IncidentPage', () => {
     expect(screen.queryByRole('region', { name: 'Actions' })).not.toBeInTheDocument()
   })
 
-  it('lets an engineer take an incident by assigning it to themselves', async () => {
+  it('lets the assigned engineer start work without naming an assignee', async () => {
+    const fetch = stubApi(
+      routes(
+        incidentFixture({
+          assignee_id: ENGINEER.id,
+          assignee: ENGINEER,
+          allowed_transitions: [{ to: 'In Progress', label: 'Acknowledge and start work', requires: [] }],
+        }),
+        [['POST', '/api/incidents/inc-1/transition', ({ body }) => jsonResponse(200, incidentFixture({ status: body.target_status }))]],
+      ),
+    )
+    renderDetail(ENGINEER)
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Acknowledge and start work' }))
+    const dialog = within(screen.getByRole('dialog'))
+    expect(dialog.queryByText(/assigned to you/)).not.toBeInTheDocument()
+    expect(dialog.queryByLabelText('Engineer')).not.toBeInTheDocument()
+    await userEvent.click(dialog.getByRole('button', { name: 'Acknowledge and start work' }))
+
+    await waitFor(() => {
+      const post = fetch.mock.calls.find(([, init]) => init?.method === 'POST')
+      expect(JSON.parse(post[1].body)).toEqual({ target_status: 'In Progress' })
+    })
+  })
+
+  it('never offers an engineer an assignee field, even if the API asked for one', async () => {
     const fetch = stubApi(
       routes(
         incidentFixture({
@@ -122,12 +147,12 @@ describe('IncidentPage', () => {
 
     await userEvent.click(await screen.findByRole('button', { name: 'Acknowledge and start work' }))
     const dialog = within(screen.getByRole('dialog'))
-    expect(dialog.getByText(/It will be assigned to you/)).toBeInTheDocument()
+    expect(dialog.queryByLabelText('Engineer')).not.toBeInTheDocument()
     await userEvent.click(dialog.getByRole('button', { name: 'Acknowledge and start work' }))
 
     await waitFor(() => {
       const post = fetch.mock.calls.find(([, init]) => init?.method === 'POST')
-      expect(JSON.parse(post[1].body)).toEqual({ target_status: 'In Progress', assignee_id: ENGINEER.id })
+      expect(JSON.parse(post[1].body)).toEqual({ target_status: 'In Progress' })
     })
   })
 

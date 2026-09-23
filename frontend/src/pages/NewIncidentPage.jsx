@@ -119,7 +119,7 @@ export default function NewIncidentPage() {
     setSubmitting(true)
     setFormError(null)
     try {
-      const incident = await createIncident({
+      await createIncident({
         title: values.title.trim(),
         description: values.description.trim(),
         priority: values.priority,
@@ -128,7 +128,10 @@ export default function NewIncidentPage() {
         floor_id: values.floor_id || null,
         seat_id: values.seat_id || null,
       })
-      navigate(`/incidents/${incident.id}`, { replace: true, state: { notice: 'Incident reported.' } })
+      // Back to the list rather than the new incident's page: an engineer
+      // cannot see their own report until an admin assigns it, so the
+      // detail page would 404 on them.
+      navigate('/', { replace: true, state: { notice: 'Incident created successfully.' } })
     } catch (err) {
       if (err instanceof ApiError && err.status === 400) {
         const { fieldErrors: serverErrors, formErrors } = splitDetails(err.details, FIELDS)

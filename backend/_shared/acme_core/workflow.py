@@ -30,7 +30,6 @@ class Actor(StrEnum):
     """
 
     ADMIN = "admin"
-    ANY_ENGINEER = "any_engineer"
     ASSIGNED_ENGINEER = "assigned_engineer"
     REPORTER = "reporter"
 
@@ -73,7 +72,7 @@ TRANSITIONS: Final[tuple[TransitionRule, ...]] = (
     TransitionRule(
         IncidentStatus.OPEN,
         IncidentStatus.IN_PROGRESS,
-        frozenset({Actor.ADMIN, Actor.ANY_ENGINEER}),
+        frozenset({Actor.ADMIN, Actor.ASSIGNED_ENGINEER}),
         frozenset(),
         frozenset({"assignee_id"}),
         "Acknowledge and start work",
@@ -166,10 +165,14 @@ def actors_for(context: TransitionContext) -> frozenset[Actor]:
         # The entire admin bypass. Note what it is not: it does not add
         # ASSIGNED_ENGINEER or REPORTER, and it cannot create an edge.
         actors.add(Actor.ADMIN)
-    if context.actor_role is Role.ENGINEER:
-        actors.add(Actor.ANY_ENGINEER)
-        if context.assignee_id is not None and context.assignee_id == context.actor_id:
-            actors.add(Actor.ASSIGNED_ENGINEER)
+    if (
+        context.actor_role is Role.ENGINEER
+        and context.assignee_id is not None
+        and context.assignee_id == context.actor_id
+    ):
+        # Being an engineer grants nothing by itself: only assignment, which
+        # is an admin's act, gives an engineer a hand in an incident.
+        actors.add(Actor.ASSIGNED_ENGINEER)
     if context.reporter_id == context.actor_id:
         actors.add(Actor.REPORTER)
     return frozenset(actors)

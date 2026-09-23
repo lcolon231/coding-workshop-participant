@@ -19,7 +19,7 @@ pytestmark = pytest.mark.unit
 # (source, target, allowed actors, fields the caller must supply or have set)
 EXPECTED: frozenset[tuple[S, S, frozenset[Actor], frozenset[str]]] = frozenset(
     {
-        (S.OPEN, S.IN_PROGRESS, frozenset({Actor.ADMIN, Actor.ANY_ENGINEER}),
+        (S.OPEN, S.IN_PROGRESS, frozenset({Actor.ADMIN, Actor.ASSIGNED_ENGINEER}),
          frozenset({"assignee_id"})),
         (S.OPEN, S.CLOSED, frozenset({Actor.ADMIN}),
          frozenset({"resolution_note"})),

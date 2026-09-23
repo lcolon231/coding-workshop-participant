@@ -103,9 +103,10 @@ class TestWhoSeesWhat:
         """Assignment, not the Engineer role, is what grants visibility."""
         assert world.alices_incident.id not in visible(db_session, world.engineer)
 
-    def test_an_engineer_sees_incidents_they_reported(
+    def test_an_engineer_does_not_see_incidents_they_reported(
         self, db_session: Session, world: World
     ) -> None:
+        """Reporting grants an engineer nothing; only an admin's assignment does."""
         own = Incident(
             title="engineer's own", description="d",
             reporter_id=world.engineer.id,
@@ -113,7 +114,7 @@ class TestWhoSeesWhat:
         )
         db_session.add(own)
         db_session.flush()
-        assert own.id in visible(db_session, world.engineer)
+        assert own.id not in visible(db_session, world.engineer)
 
     def test_an_admin_sees_everything(self, db_session: Session, world: World) -> None:
         assert visible(db_session, world.admin) == {

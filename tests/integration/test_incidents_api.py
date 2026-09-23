@@ -389,13 +389,14 @@ class TestList:
         assert [i["title"] for i in body["items"]] == ["Mine"]
         assert body["total"] == 1
 
-    def test_an_engineer_sees_assigned_and_own(
+    def test_an_engineer_sees_only_what_is_assigned_to_them(
         self, incidents_client: TestClient, api: Api, actors: Actors, seeded: dict[str, Any]
     ) -> None:
+        """Not even their own report, until an admin assigns it to them."""
         api.report(actors.engineer, title="Engineer's own")
         body = incidents_client.get(P, headers=actors.engineer).json()
-        titles = {i["title"] for i in body["items"]}
-        assert titles == {"Theirs, assigned", "Engineer's own"}
+        assert [i["title"] for i in body["items"]] == ["Theirs, assigned"]
+        assert body["total"] == 1
 
     def test_an_admin_sees_everything(
         self, incidents_client: TestClient, actors: Actors, seeded: dict[str, Any]
@@ -852,12 +853,17 @@ class TestTransitionOrderOfChecks:
         assert resp.status_code == 400
         assert resp.json()["details"][0]["field"] == "assignee_id"
 
-    def test_5_an_engineer_may_only_assign_themselves(
-        self, api: Api, actors: Actors, world: World
+    @pytest.mark.parametrize("whom", ["engineer", "other_engineer"])
+    def test_5_an_engineer_may_not_assign_anyone(
+        self, api: Api, actors: Actors, world: World, incidents_client: TestClient, whom: str
     ) -> None:
-        mine = api.report(actors.engineer)  # visible to them as reporter
+        """Not even themselves: assignment is an admin's act, full stop."""
+        mine = api.report(actors.employee)
+        incidents_client.put(
+            f"{P}/{mine['id']}", json={"assignee_id": str(world.engineer.id)}, headers=actors.admin
+        )
         resp = api.move(actors.engineer, mine["id"], "In Progress",
-                        assignee_id=str(world.other_engineer.id))
+                        assignee_id=str(getattr(world, whom).id))
         assert (resp.status_code, resp.json()["error"]) == (403, "forbidden")
 
     def test_5_the_assignee_must_be_an_active_engineer(
@@ -911,14 +917,19 @@ class TestTransitionEdges:
         body = api.moved(actors.engineer, mine["id"], "In Progress")
         assert body["status"] == "In Progress"
 
-    def test_an_engineer_assigns_themselves_while_starting(
-        self, api: Api, actors: Actors, world: World
+    def test_an_engineer_cannot_pick_up_their_own_report(
+        self, api: Api, actors: Actors, world: World, incidents_client: TestClient
     ) -> None:
+        """Reporting it does not make it theirs: 404 until an admin assigns it."""
         own = api.report(actors.engineer)
-        body = api.moved(
-            actors.engineer, own["id"], "In Progress", assignee_id=str(world.engineer.id)
+        resp = api.move(actors.engineer, own["id"], "In Progress",
+                        assignee_id=str(world.engineer.id))
+        assert resp.status_code == 404
+        incidents_client.put(
+            f"{P}/{own['id']}", json={"assignee_id": str(world.engineer.id)}, headers=actors.admin
         )
-        assert body["assignee_id"] == str(world.engineer.id)
+        body = api.moved(actors.engineer, own["id"], "In Progress")
+        assert body["status"] == "In Progress"
 
     def test_open_to_closed_without_work(
         self, api: Api, actors: Actors, verify_session: Session
@@ -1017,7 +1028,7 @@ class TestWorkflow:
         first = body["transitions"][0]
         assert first == {
             "from": "Open", "to": "In Progress", "label": "Acknowledge and start work",
-            "allowed_actors": ["admin", "any_engineer"], "requires": ["assignee_id"],
+            "allowed_actors": ["admin", "assigned_engineer"], "requires": ["assignee_id"],
         }
         assert not any(t["from"] == "Closed" for t in body["transitions"])
 
@@ -1713,22 +1724,6 @@ class TestNotifications:
         )
         assert resp.status_code == 200, resp.text
         assert len(notifications_of(verify_session, world.engineer)) == 1
-
-    def test_an_engineer_assigning_themselves_is_not_told(
-        self,
-        incidents_client: TestClient,
-        api: Api,
-        actors: Actors,
-        world: World,
-        verify_session: Session,
-    ) -> None:
-        # An engineer who reported the incident themselves may pick it up;
-        # nobody needs to tell them what they just did.
-        incident = api.report(actors.engineer)
-        api.moved(
-            actors.engineer, incident["id"], "In Progress", assignee_id=str(world.engineer.id)
-        )
-        assert notifications_of(verify_session, world.engineer) == []
 
     def test_a_failed_assignment_leaves_no_notification(
         self,

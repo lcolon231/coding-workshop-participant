@@ -229,7 +229,7 @@ SEED_INCIDENTS: Final[tuple[SeedIncident, ...]] = (
         EMPLOYEE, Priority.CRITICAL, "HQ", days_ago=12,
         category=("Workplace Technology", "Network"), floor=2,
         steps=(
-            SeedStep(IT_ENGINEER, _START, 0.25, assignee=IT_ENGINEER),
+            SeedStep(ADMIN, _START, 0.25, assignee=IT_ENGINEER),
             SeedStep(IT_ENGINEER, IncidentStatus.RESOLVED, 2.5,
                      {"resolution_note": "Reseated the uplink; switch rebooted."}),
             SeedStep(EMPLOYEE, IncidentStatus.CLOSED, 30),

@@ -30,8 +30,8 @@ const COPY = {
  *
  * `option` is one of the incident's `allowed_transitions`, so the API has
  * already said this caller may take it; the dialog only supplies the fields.
- * An engineer who must name an assignee names themselves; an admin picks from
- * the active engineers.
+ * Only an admin is ever asked for an assignee: an engineer reaches this edge
+ * only once assigned, and the API refuses an assignee from anyone else.
  */
 export default function TransitionDialog({
   open,
@@ -66,9 +66,7 @@ function TransitionForm({ option, incident, user, engineers, onSubmit, onClose }
 
 
   const requires = option.requires ?? []
-  const needsAssignee = requires.includes('assignee_id')
-  const selfAssign = needsAssignee && user.role === 'Engineer'
-  const adminAssign = needsAssignee && user.role === 'Facility Admin'
+  const adminAssign = requires.includes('assignee_id') && user.role === 'Facility Admin'
   const textFields = requires.filter((name) => COPY[name])
 
   function handleChange(event) {
@@ -92,7 +90,6 @@ function TransitionForm({ option, incident, user, engineers, onSubmit, onClose }
 
     const body = { target_status: option.to }
     for (const name of textFields) body[name] = values[name].trim()
-    if (selfAssign) body.assignee_id = user.id
     if (adminAssign) body.assignee_id = values.assignee_id
 
     setSubmitting(true)
@@ -120,7 +117,6 @@ function TransitionForm({ option, incident, user, engineers, onSubmit, onClose }
         <Stack spacing={3} sx={{ pt: 1 }}>
           <Typography color="text.secondary">
             This moves the incident from {incident.status} to {option.to}.
-            {selfAssign && ' It will be assigned to you.'}
             {option.to === 'Closed' && ' A closed incident cannot be reopened.'}
           </Typography>
           {formError && <Alert severity="error">{formError}</Alert>}
