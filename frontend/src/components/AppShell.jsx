@@ -16,7 +16,15 @@ import { Plus, SignOut } from '@phosphor-icons/react'
 import { useAuth } from '../auth/AuthContext'
 import { initials } from '../lib/format'
 
-const NAV = [{ to: '/', label: 'Incidents', end: true }]
+const ADMIN = ['Facility Admin']
+
+/** Links without `roles` show for everyone; the rest only for the roles listed. */
+const NAV = [
+  { to: '/', label: 'Incidents', end: true },
+  { to: '/users', label: 'Users', roles: ADMIN },
+  { to: '/facilities', label: 'Facilities', roles: ADMIN },
+  { to: '/reports', label: 'Reports', roles: ADMIN },
+]
 
 function UserMenu({ user, onSignOut }) {
   const [anchor, setAnchor] = useState(null)
@@ -80,11 +88,13 @@ function UserMenu({ user, onSignOut }) {
  * The signed-in frame: one 64px bar with the wordmark, the primary links,
  * the report action and the account menu, over a contained page.
  *
- * The bar never wraps: on phones the report action becomes an icon button
- * and the link labels stay as they are, because there is room for them.
+ * The bar never wraps: on phones the report action becomes an icon button,
+ * the wordmark shortens, and an admin's four links scroll sideways rather
+ * than squeezing.
  */
 export default function AppShell() {
   const { user, signOut } = useAuth()
+  const links = NAV.filter((item) => !item.roles || item.roles.includes(user.role))
 
   return (
     <Box
@@ -124,11 +134,28 @@ export default function AppShell() {
               mr: { xs: 0, sm: 2 },
             }}
           >
-            ACME Facility Incidents
+            <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>
+              ACME Facility Incidents
+            </Box>
+            <Box component="span" sx={{ display: { xs: 'inline', sm: 'none' } }}>
+              ACME
+            </Box>
           </Typography>
 
-          <Box component="nav" aria-label="Primary" sx={{ display: 'flex', gap: 0.5, flex: 1 }}>
-            {NAV.map((item) => (
+          <Box
+            component="nav"
+            aria-label="Primary"
+            sx={{
+              display: 'flex',
+              gap: 0.5,
+              flex: 1,
+              minWidth: 0,
+              overflowX: 'auto',
+              scrollbarWidth: 'none',
+              '&::-webkit-scrollbar': { display: 'none' },
+            }}
+          >
+            {links.map((item) => (
               <Button
                 key={item.to}
                 component={NavLink}
@@ -139,6 +166,7 @@ export default function AppShell() {
                 sx={{
                   minHeight: 36,
                   px: 1.5,
+                  flexShrink: 0,
                   color: 'text.secondary',
                   '&.active': { color: 'text.primary', bgcolor: 'action.selected' },
                 }}

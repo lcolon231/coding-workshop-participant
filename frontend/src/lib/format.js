@@ -28,6 +28,40 @@ export function formatRelative(iso, now = Date.now()) {
   return 'just now'
 }
 
+const dateOnly = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeZone: 'UTC' })
+
+/** "22 Sept 2026" for a date or an ISO date string; dates are calendar days, so UTC. */
+export function formatDate(value) {
+  if (!value) return ''
+  return dateOnly.format(new Date(value))
+}
+
+/** `YYYY-MM-DD` in UTC, the form the API takes for a date. */
+export function isoDate(date) {
+  return new Date(date).toISOString().slice(0, 10)
+}
+
+/** "45s", "12m", "2h 15m", "3d 4h". Nothing measured is an em dash. */
+export function formatDuration(seconds) {
+  if (seconds === null || seconds === undefined || !Number.isFinite(seconds)) return '—'
+  const total = Math.max(0, Math.round(seconds))
+  if (total < 60) return `${total}s`
+  const minutes = Math.floor(total / 60)
+  if (minutes < 60) return `${minutes}m`
+  const hours = Math.floor(minutes / 60)
+  const restMinutes = minutes % 60
+  if (hours < 24) return restMinutes ? `${hours}h ${restMinutes}m` : `${hours}h`
+  const days = Math.floor(hours / 24)
+  const restHours = hours % 24
+  return restHours ? `${days}d ${restHours}h` : `${days}d`
+}
+
+/** A 0..1 ratio as "83%"; nothing measured is an em dash. */
+export function formatPercent(ratio) {
+  if (ratio === null || ratio === undefined || !Number.isFinite(ratio)) return '—'
+  return `${Math.round(ratio * 100)}%`
+}
+
 /** "Eve Employee" to "EE", for an avatar. */
 export function initials(name) {
   return String(name ?? '')
