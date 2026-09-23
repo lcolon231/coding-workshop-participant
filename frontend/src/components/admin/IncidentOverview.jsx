@@ -109,7 +109,7 @@ export default function IncidentOverview() {
   const critical = [{ name: 'Critical', value: (row) => row.critical }]
 
   return (
-    <Box component="section" aria-labelledby="overview-heading" sx={{ p: { xs: 2, md: 3 }, border: 1, borderColor: 'divider', borderRadius: 1, bgcolor: 'background.paper' }}>
+    <Box component="section" aria-labelledby="overview-heading" sx={{ p: { xs: 2, md: 3 }, border: 1, borderColor: 'divider', borderRadius: 1, bgcolor: 'background.paper', boxShadow: 1 }}>
       <Stack
         direction={{ xs: 'column', sm: 'row' }}
         spacing={1.5}

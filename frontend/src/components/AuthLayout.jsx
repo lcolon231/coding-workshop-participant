@@ -35,7 +35,7 @@ export default function AuthLayout({ title, subtitle, children, footer }) {
           position: 'relative',
           overflow: 'hidden',
           // Seen until the photo arrives, and if it never does.
-          bgcolor: '#1b2b47',
+          background: 'linear-gradient(160deg, #2e1065 0%, #5b21b6 60%, #7c3aed 100%)',
         }}
       >
         <Box
@@ -48,8 +48,10 @@ export default function AuthLayout({ title, subtitle, children, footer }) {
           sx={{
             position: 'absolute',
             inset: 0,
+            // A purple wash over the photo so the panel reads as the brand,
+            // darker at both ends where the text sits.
             background:
-              'linear-gradient(180deg, rgba(16,17,20,0.6) 0%, rgba(16,17,20,0.2) 40%, rgba(16,17,20,0.65) 100%)',
+              'linear-gradient(180deg, rgba(46,16,101,0.72) 0%, rgba(76,29,149,0.35) 45%, rgba(30,10,70,0.78) 100%)',
           }}
         />
         <Wordmark sx={{ position: 'absolute', top: 32, left: 32, color: '#f4f4f5' }} />
@@ -74,6 +76,10 @@ export default function AuthLayout({ title, subtitle, children, footer }) {
           flexDirection: 'column',
           px: { xs: 2, sm: 4 },
           py: { xs: 4, md: 8 },
+          // A faint accent glow behind the form's top edge.
+          backgroundImage:
+            'radial-gradient(70% 280px at 50% -60px, rgba(var(--mui-palette-primary-mainChannel) / 0.12), transparent)',
+          backgroundRepeat: 'no-repeat',
         }}
       >
         <Wordmark sx={{ display: { md: 'none' }, mb: 6 }} />
