@@ -298,7 +298,7 @@ export default function IncidentsPage() {
           {user.role === 'Facility Admin'
             ? 'Everything reported across every building.'
             : user.role === 'Engineer'
-              ? 'Work assigned to you, and anything you reported.'
+              ? 'Work a Facility Admin has assigned to you.'
               : 'Everything you have reported.'}
         </Typography>
       </Box>

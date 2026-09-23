@@ -208,13 +208,11 @@ def _notify_assignee(
     """Tell the engineer an incident was just handed to.
 
     Only on an actual change of hands: re-saving the same assignee says
-    nothing new, and an engineer who picked the work up themselves is not
-    told what they just did.
+    nothing new. The assigner is always an admin and the assignee always an
+    engineer, so nobody is ever told about their own act.
     """
     assignee_id = incident.assignee_id
     if assignee_id is None or assignee_id == previous_assignee_id:
-        return
-    if assignee_id == principal.user_id:
         return
     repo.add_notification(
         session,
@@ -435,14 +433,14 @@ def transition(
 
     The checks run in the order api.md I6 pins, each with its own error, and
     the first failure wins: scope (404), edge (409), actor (403), required
-    fields (400), then the assignee (403 for an engineer naming anyone but
-    themselves, 400 for anyone who is not an active Engineer).
+    fields (400), then the assignee (403 for anyone but an admin naming one,
+    400 for an assignee who is not an active Engineer).
 
     Raises:
         NotFound: No such incident, or not visible.
         InvalidTransition: No edge from the current status to the target.
         Forbidden: The edge exists but this caller may not take it, or the
-            assignee named is not one the caller may assign.
+            caller is not an admin and named an assignee.
         ValidationFailed: A required note is missing or blank, an assignee
             is needed and none exists, or the assignee is not an Engineer.
     """
@@ -452,10 +450,8 @@ def transition(
     previous_assignee_id = incident.assignee_id
 
     if body.assignee_id is not None:
-        if principal.role is Role.ENGINEER and body.assignee_id != principal.user_id:
-            raise Forbidden("An engineer may only assign an incident to themselves.")
-        if principal.role is Role.EMPLOYEE:
-            raise Forbidden("Only an admin or an engineer may assign an incident.")
+        if not principal.is_admin:
+            raise Forbidden("Only a Facility Admin may assign an incident.")
         incident.assignee = _active_engineer(session, body.assignee_id)
 
     now = _now()

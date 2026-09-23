@@ -94,7 +94,7 @@ def test_admin_still_needs_an_assignee_to_start_work() -> None:
 
 
 def test_an_assignee_supplied_in_the_request_satisfies_it() -> None:
-    """Which is what an engineer self-assigning actually does."""
+    """Which is what an admin assigning and starting in one step does."""
     ctx = TransitionContext(
         current=S.OPEN,
         actor_id=ADMIN,
