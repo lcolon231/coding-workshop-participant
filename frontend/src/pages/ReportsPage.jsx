@@ -1,11 +1,13 @@
 import { useCallback, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link as RouterLink, useSearchParams } from 'react-router-dom'
 import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Chip from '@mui/material/Chip'
 import LinearProgress from '@mui/material/LinearProgress'
+import Link from '@mui/material/Link'
 import OutlinedInput from '@mui/material/OutlinedInput'
+import Pagination from '@mui/material/Pagination'
 import Select from '@mui/material/Select'
 import Skeleton from '@mui/material/Skeleton'
 import Stack from '@mui/material/Stack'
@@ -18,16 +20,23 @@ import Typography from '@mui/material/Typography'
 import BarList from '../components/charts/BarList'
 import StackedColumns from '../components/charts/StackedColumns'
 import StatTile from '../components/charts/StatTile'
+import { PriorityChip, StatusChip } from '../components/IncidentChips'
+import Notice from '../components/Notice'
 import { EmptyState, LoadError } from '../components/PageState'
+import { saveTextFile } from '../lib/download'
 import { formatDate, formatDuration, formatPercent } from '../lib/format'
+import { PAGE_SIZE } from '../lib/incidents'
 import {
   INTERVALS,
   RANGE_PRESETS,
   SLA_GROUPS,
   VOLUME_GROUPS,
   buildSeries,
+  collectAll,
   countOf,
   defaultRange,
+  exportFilename,
+  incidentsCsv,
   openBacklog,
   pivotVolume,
   presetFor,
@@ -35,7 +44,8 @@ import {
 } from '../lib/reports'
 import { useLoad } from '../lib/useLoad'
 import { listBuildings } from '../services/facilities'
-import { fetchSla, fetchSummary, fetchVolume } from '../services/reports'
+import { listIncidents } from '../services/incidents'
+import { fetchBuildings, fetchEngineers, fetchSla, fetchSummary, fetchVolume } from '../services/reports'
 
 const selectSx = { minWidth: { xs: '100%', sm: 160 }, '& .MuiSelect-select': { py: 1 } }
 
@@ -95,12 +105,102 @@ function Frame({ height = 120 }) {
   return <Skeleton variant="rounded" height={height} />
 }
 
+/** A date stamp in a table cell, or a dash when it has not happened. */
+function Stamp({ iso }) {
+  if (!iso) {
+    return (
+      <Typography component="span" variant="body2" color="text.secondary">
+        —
+      </Typography>
+    )
+  }
+  return <time dateTime={iso}>{formatDate(iso)}</time>
+}
+
+function EngineerTable({ rows, loading }) {
+  return (
+    <Table size="small" aria-label="Engineer workload" aria-busy={loading}>
+      <TableHead>
+        <TableRow>
+          <TableCell>Engineer</TableCell>
+          <TableCell align="right">Assigned</TableCell>
+          <TableCell align="right">Open</TableCell>
+          <TableCell align="right">Completed</TableCell>
+          <TableCell align="right">Resolved, mean</TableCell>
+        </TableRow>
+      </TableHead>
+      <TableBody>
+        {rows.map((row) => (
+          <TableRow key={row.engineer_id}>
+            <TableCell sx={{ fontWeight: 500 }}>
+              {row.engineer}
+              {!row.is_active && (
+                <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 1, fontWeight: 400 }}>
+                  Deactivated
+                </Typography>
+              )}
+            </TableCell>
+            <TableCell align="right">{row.assigned_count}</TableCell>
+            <TableCell align="right">{row.open_count}</TableCell>
+            <TableCell align="right">{row.completed_count}</TableCell>
+            <TableCell align="right">{formatDuration(row.mean_resolve_seconds)}</TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  )
+}
+
+function IncidentRows({ items, buildingNames }) {
+  if (items === null) {
+    return Array.from({ length: 5 }, (_, i) => (
+      <TableRow key={i}>
+        {Array.from({ length: 7 }, (_, j) => (
+          <TableCell key={j}>
+            <Skeleton width={j === 0 ? '70%' : 64} />
+          </TableCell>
+        ))}
+      </TableRow>
+    ))
+  }
+  return items.map((incident) => (
+    <TableRow key={incident.id} hover>
+      <TableCell sx={{ maxWidth: 360 }}>
+        <Link component={RouterLink} to={`/incidents/${incident.id}`} sx={{ fontWeight: 500, textDecoration: 'none' }}>
+          {incident.title}
+        </Link>
+        <Typography variant="body2" color="text.secondary" noWrap>
+          {incident.reporter.full_name}
+        </Typography>
+      </TableCell>
+      <TableCell>
+        <StatusChip status={incident.status} />
+      </TableCell>
+      <TableCell>
+        <PriorityChip priority={incident.priority} />
+      </TableCell>
+      <TableCell>{buildingNames.get(incident.building_id) ?? '—'}</TableCell>
+      <TableCell sx={{ color: incident.assignee ? 'text.primary' : 'text.secondary' }}>
+        {incident.assignee?.full_name ?? 'Unassigned'}
+      </TableCell>
+      <TableCell>
+        <Stamp iso={incident.created_at} />
+      </TableCell>
+      <TableCell>
+        <Stamp iso={incident.resolved_at} />
+      </TableCell>
+    </TableRow>
+  ))
+}
+
 /**
- * The admin dashboard: what came in, how fast it was handled, and how the
- * backlog looks, over a date range and optionally one building.
+ * The admin dashboard: what came in, how fast it was handled, how the
+ * backlog looks, which buildings and engineers carry the load, and every
+ * incident behind the numbers, over a date range and optionally one building.
  *
- * Every control lives in the URL. Each of the three reports loads on its
- * own, so a failure in one leaves the others standing with their own retry.
+ * Every control lives in the URL. Each report loads on its own, so a failure
+ * in one leaves the others standing with their own retry. The CSV export
+ * walks the same list the table shows, page by page, and hands over one file.
  */
 export default function ReportsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -113,6 +213,9 @@ export default function ReportsPage() {
   const interval = INTERVALS.some((i) => i.value === searchParams.get('interval')) ? searchParams.get('interval') : 'day'
   const volumeGroup = VOLUME_GROUPS.some((g) => g.value === searchParams.get('group')) ? searchParams.get('group') : 'status'
   const [volumeTable, setVolumeTable] = useState(false)
+  const pageNumber = Math.max(1, Number.parseInt(searchParams.get('page') ?? '1', 10) || 1)
+  const [exporting, setExporting] = useState(false)
+  const [notice, setNotice] = useState(null)
   const rangeInvalid = range.from > range.to
   const preset = presetFor(range)
 
@@ -122,6 +225,8 @@ export default function ReportsPage() {
       if (value) next.set(key, value)
       else next.delete(key)
     }
+    // A new window or building starts the incident list from its first page.
+    if (!('page' in changes)) next.delete('page')
     setSearchParams(next)
   }
 
@@ -134,16 +239,60 @@ export default function ReportsPage() {
     () => fetchVolume({ from, to, building_id: buildingId, interval, group_by: volumeGroup }),
     [from, to, buildingId, interval, volumeGroup],
   )
+  const loadByBuilding = useCallback(() => fetchBuildings({ from, to, building_id: buildingId }), [from, to, buildingId])
+  const loadEngineers = useCallback(() => fetchEngineers({ from, to, building_id: buildingId }), [from, to, buildingId])
+  const listParams = useCallback(
+    ({ limit, offset, order = 'desc' }) =>
+      listIncidents({
+        created_from: from,
+        created_to: to,
+        building_id: buildingId,
+        sort: 'created_at',
+        order,
+        limit,
+        offset,
+      }),
+    [from, to, buildingId],
+  )
+  const loadIncidents = useCallback(
+    () => listParams({ limit: PAGE_SIZE, offset: (pageNumber - 1) * PAGE_SIZE }),
+    [listParams, pageNumber],
+  )
   const loadBuildings = useCallback(() => listBuildings(), [])
   const summary = useLoad(loadSummary, !rangeInvalid)
   const sla = useLoad(loadSla, !rangeInvalid)
   const volume = useLoad(loadVolume, !rangeInvalid)
+  const byBuilding = useLoad(loadByBuilding, !rangeInvalid)
+  const engineers = useLoad(loadEngineers, !rangeInvalid)
+  const incidents = useLoad(loadIncidents, !rangeInvalid)
   const buildings = useLoad(loadBuildings)
 
   const series = volume.data ? buildSeries(volumeGroup, volume.data.rows) : []
   const buckets = volume.data ? pivotVolume(volume.data.rows, { ...range, interval, series }) : []
   const volumeTotal = buckets.reduce((sum, bucket) => sum + bucket.total, 0)
   const targets = sla.data?.targets ?? []
+  const buildingNames = useMemo(
+    () => new Map((buildings.data?.items ?? []).map((building) => [building.id, building.name])),
+    [buildings.data],
+  )
+  const buildingRows = byBuilding.data?.rows ?? []
+  const buildingsTotal = buildingRows.reduce((sum, row) => sum + row.count, 0)
+  const engineerRows = engineers.data?.rows ?? []
+  const engineersTotal = engineerRows.reduce((sum, row) => sum + row.assigned_count, 0)
+  const pageCount = incidents.data ? Math.max(1, Math.ceil(incidents.data.total / incidents.data.limit)) : 1
+
+  async function exportCsv() {
+    setExporting(true)
+    try {
+      const items = await collectAll((paging) => listParams({ ...paging, order: 'asc' }))
+      saveTextFile(exportFilename(range), incidentsCsv(items, buildingNames))
+      setNotice(`Exported ${items.length} incident${items.length === 1 ? '' : 's'}.`)
+    } catch (err) {
+      setNotice({ message: `Could not export: ${err.message}`, severity: 'error' })
+    } finally {
+      setExporting(false)
+    }
+  }
 
   return (
     <Stack spacing={4}>
@@ -369,6 +518,128 @@ export default function ReportsPage() {
           </Box>
         )}
       </Section>
+
+      <Section id="buildings-heading" title="Buildings">
+        {byBuilding.error && (
+          <Box sx={{ mb: 2 }}>
+            <LoadError message={byBuilding.error} onRetry={byBuilding.reload} />
+          </Box>
+        )}
+        {byBuilding.data === null ? (
+          !byBuilding.error && <Frame height={160} />
+        ) : buildingsTotal === 0 ? (
+          <EmptyState title="No incidents in this range" body="Buildings rank by incidents once something has been reported." />
+        ) : (
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' }, gap: 4, opacity: byBuilding.loading ? 0.6 : 1 }}>
+            <BarList title="Most incidents" items={buildingRows.map((row) => ({ key: row.building, count: row.count }))} />
+            <BarList
+              title="Still open"
+              items={[...buildingRows].sort((a, b) => b.open_count - a.open_count).map((row) => ({ key: row.building, count: row.open_count }))}
+            />
+            <BarList
+              title="Critical"
+              items={[...buildingRows].sort((a, b) => b.critical_count - a.critical_count).map((row) => ({ key: row.building, count: row.critical_count }))}
+            />
+          </Box>
+        )}
+      </Section>
+
+      <Section id="engineers-heading" title="Engineers">
+        {engineers.error && (
+          <Box sx={{ mb: 2 }}>
+            <LoadError message={engineers.error} onRetry={engineers.reload} />
+          </Box>
+        )}
+        {engineers.data === null ? (
+          !engineers.error && <Frame height={200} />
+        ) : engineerRows.length === 0 ? (
+          <EmptyState title="No engineers yet" body="Workload appears once an engineer has an account." />
+        ) : (
+          <Stack spacing={3} sx={{ opacity: engineers.loading ? 0.6 : 1 }}>
+            {engineersTotal > 0 && (
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 4 }}>
+                <BarList title="Completed" items={engineerRows.map((row) => ({ key: row.engineer, count: row.completed_count }))} />
+                <BarList
+                  title="Open workload"
+                  items={[...engineerRows].sort((a, b) => b.open_count - a.open_count).map((row) => ({ key: row.engineer, count: row.open_count }))}
+                />
+              </Box>
+            )}
+            <Box sx={{ overflowX: 'auto' }}>
+              <EngineerTable rows={engineerRows} loading={engineers.loading} />
+            </Box>
+          </Stack>
+        )}
+      </Section>
+
+      <Section
+        id="incidents-heading"
+        title="All incidents"
+        controls={
+          <Button
+            size="small"
+            variant="outlined"
+            onClick={exportCsv}
+            disabled={exporting || rangeInvalid || (incidents.data?.total ?? 0) === 0}
+            sx={{ minHeight: 36 }}
+          >
+            {exporting ? 'Exporting…' : 'Download CSV'}
+          </Button>
+        }
+      >
+        {incidents.error && (
+          <Box sx={{ mb: 2 }}>
+            <LoadError message={incidents.error} onRetry={incidents.reload} />
+          </Box>
+        )}
+        {incidents.data !== null && incidents.data.total === 0 ? (
+          <EmptyState title="No incidents in this range" body="Every incident reported in the range is listed here." />
+        ) : (
+          (incidents.data !== null || !incidents.error) && (
+            <Box sx={{ opacity: incidents.loading ? 0.6 : 1 }}>
+              <Box sx={{ overflowX: 'auto' }}>
+                <Table size="small" aria-label="All incidents" aria-busy={incidents.loading}>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Title</TableCell>
+                      <TableCell>Status</TableCell>
+                      <TableCell>Priority</TableCell>
+                      <TableCell>Building</TableCell>
+                      <TableCell>Assignee</TableCell>
+                      <TableCell>Reported</TableCell>
+                      <TableCell>Resolved</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    <IncidentRows items={incidents.data?.items ?? null} buildingNames={buildingNames} />
+                  </TableBody>
+                </Table>
+              </Box>
+              {incidents.data && (
+                <Stack
+                  direction={{ xs: 'column', sm: 'row' }}
+                  spacing={1.5}
+                  sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between', mt: 2 }}
+                >
+                  <Typography variant="body2" color="text.secondary">
+                    Showing {incidents.data.offset + 1}–{incidents.data.offset + incidents.data.items.length} of {incidents.data.total}
+                  </Typography>
+                  {pageCount > 1 && (
+                    <Pagination
+                      count={pageCount}
+                      page={Math.min(pageNumber, pageCount)}
+                      onChange={(_, value) => update({ page: value === 1 ? null : String(value) })}
+                      shape="rounded"
+                    />
+                  )}
+                </Stack>
+              )}
+            </Box>
+          )
+        )}
+      </Section>
+
+      <Notice notice={notice} onClose={() => setNotice(null)} />
     </Stack>
   )
 }

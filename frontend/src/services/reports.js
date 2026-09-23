@@ -1,7 +1,7 @@
 /**
  * Admin reports over incidents.
  *
- * All three take `from`, `to` (inclusive dates, default the last 30 days,
+ * All of them take `from`, `to` (inclusive dates, default the last 30 days,
  * at most 366 days apart) and an optional `building_id`.
  */
 import { authedRequest, withQuery } from './api'
@@ -21,4 +21,14 @@ export function fetchSla(params = {}) {
 /** Incidents created per `interval` (day or week), split by `group_by`. Sparse rows. */
 export function fetchVolume(params = {}) {
   return authedRequest(withQuery(`${BASE}/volume`, params))
+}
+
+/** Per building: incidents in the window, how many are still open, how many critical. Busiest first. */
+export function fetchBuildings(params = {}) {
+  return authedRequest(withQuery(`${BASE}/buildings`, params))
+}
+
+/** Per engineer: assigned, still open, completed, and mean time to resolve. Most completed first. */
+export function fetchEngineers(params = {}) {
+  return authedRequest(withQuery(`${BASE}/engineers`, params))
 }

@@ -1,9 +1,13 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   bucketStarts,
   buildSeries,
+  collectAll,
   countOf,
+  csvCell,
   defaultRange,
+  exportFilename,
+  incidentsCsv,
   openBacklog,
   pivotVolume,
   presetFor,
@@ -94,5 +98,64 @@ describe('summary helpers', () => {
     expect(openBacklog(summary)).toBe(6)
     expect(countOf(summary.by_status, 'Closed')).toBe(4)
     expect(countOf(summary.by_status, 'Missing')).toBe(0)
+  })
+})
+
+describe('csv export', () => {
+  it('quotes only the cells that need it', () => {
+    expect(csvCell('plain')).toBe('plain')
+    expect(csvCell(null)).toBe('')
+    expect(csvCell('a, b')).toBe('"a, b"')
+    expect(csvCell('say "hi"')).toBe('"say ""hi"""')
+    expect(csvCell('two\nlines')).toBe('"two\nlines"')
+  })
+
+  it('writes a header and one CRLF-terminated row per incident with building names', () => {
+    const names = new Map([['b-1', 'HQ, North']])
+    const csv = incidentsCsv(
+      [
+        {
+          id: 'i1',
+          title: 'Leak',
+          status: 'Open',
+          priority: 'Low',
+          building_id: 'b-1',
+          reporter: { full_name: 'Eve' },
+          assignee: null,
+          created_at: '2026-09-01T00:00:00Z',
+          acknowledged_at: null,
+          resolved_at: null,
+          closed_at: null,
+        },
+        { id: 'i2', title: 'Other', status: 'Open', priority: 'Low', building_id: 'b-2', created_at: 'x' },
+      ],
+      names,
+    )
+    expect(csv).toBe(
+      'id,title,status,priority,building,reporter,assignee,reported_at,acknowledged_at,resolved_at,closed_at\r\n' +
+        'i1,Leak,Open,Low,"HQ, North",Eve,,2026-09-01T00:00:00Z,,,\r\n' +
+        'i2,Other,Open,Low,b-2,,,x,,,\r\n',
+    )
+  })
+
+  it('walks pages until the total is reached and stops on an empty page', async () => {
+    const pages = [
+      { items: [1, 2], total: 3 },
+      { items: [3], total: 3 },
+    ]
+    const fetchPage = vi.fn(async () => pages.shift())
+    expect(await collectAll(fetchPage)).toEqual([1, 2, 3])
+    expect(fetchPage.mock.calls.map(([paging]) => paging)).toEqual([
+      { limit: 100, offset: 0 },
+      { limit: 100, offset: 2 },
+    ])
+
+    const shrinking = vi.fn(async () => ({ items: [], total: 5 }))
+    expect(await collectAll(shrinking)).toEqual([])
+    expect(shrinking).toHaveBeenCalledTimes(1)
+  })
+
+  it('names the file after the range', () => {
+    expect(exportFilename({ from: '2026-08-25', to: '2026-09-23' })).toBe('incidents-2026-08-25-to-2026-09-23.csv')
   })
 })

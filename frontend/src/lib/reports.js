@@ -133,3 +133,63 @@ export function openBacklog(summary) {
 export function countOf(entries, key) {
   return entries.find((entry) => entry.key === key)?.count ?? 0
 }
+
+/** How many rows one export request asks for: the API's page ceiling. */
+export const EXPORT_PAGE = 100
+
+const CSV_COLUMNS = [
+  ['id', (incident) => incident.id],
+  ['title', (incident) => incident.title],
+  ['status', (incident) => incident.status],
+  ['priority', (incident) => incident.priority],
+  ['building', (incident, names) => names.get(incident.building_id) ?? incident.building_id],
+  ['reporter', (incident) => incident.reporter?.full_name ?? ''],
+  ['assignee', (incident) => incident.assignee?.full_name ?? ''],
+  ['reported_at', (incident) => incident.created_at],
+  ['acknowledged_at', (incident) => incident.acknowledged_at ?? ''],
+  ['resolved_at', (incident) => incident.resolved_at ?? ''],
+  ['closed_at', (incident) => incident.closed_at ?? ''],
+]
+
+/** One CSV field: quoted when it holds a comma, a quote or a line break. */
+export function csvCell(value) {
+  const text = value === null || value === undefined ? '' : String(value)
+  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
+}
+
+/**
+ * The incidents as CSV with a header row, building ids resolved to names
+ * through `buildingNames` (a Map of id to name). CRLF line ends, as RFC 4180
+ * and spreadsheets expect.
+ */
+export function incidentsCsv(incidents, buildingNames = new Map()) {
+  const header = CSV_COLUMNS.map(([name]) => name).join(',')
+  const lines = incidents.map((incident) =>
+    CSV_COLUMNS.map(([, pick]) => csvCell(pick(incident, buildingNames))).join(','),
+  )
+  return [header, ...lines].join('\r\n') + '\r\n'
+}
+
+/**
+ * Every incident `fetchPage` can reach, one page after another, oldest
+ * first so the file reads top to bottom. `fetchPage` takes `{limit, offset}`
+ * and returns a `Page`.
+ */
+export async function collectAll(fetchPage) {
+  const items = []
+  let offset = 0
+  let total = Infinity
+  while (offset < total) {
+    const page = await fetchPage({ limit: EXPORT_PAGE, offset })
+    items.push(...page.items)
+    total = page.total
+    if (page.items.length === 0) break
+    offset += page.items.length
+  }
+  return items
+}
+
+/** "incidents-2026-08-25-to-2026-09-23.csv" */
+export function exportFilename(range) {
+  return `incidents-${range.from}-to-${range.to}.csv`
+}
