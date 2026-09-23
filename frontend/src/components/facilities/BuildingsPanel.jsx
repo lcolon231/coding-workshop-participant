@@ -134,7 +134,7 @@ export default function BuildingsPanel({ retired, notify }) {
       notify(`${title} ${record.is_active ? 'retired' : 'restored'}.`)
       lists[level].reload()
     } catch (err) {
-      notify(err.message)
+      notify({ message: err.message, severity: 'error' })
     }
   }
 
