@@ -63,11 +63,11 @@ describe('IncidentOverview', () => {
         'GET /api/incidents/reports/engineers?from=2026-08-25&to=2026-09-23',
       ]),
     )
-    expect(Array.from(chart.querySelectorAll('rect[aria-label]')).map((rect) => rect.getAttribute('aria-label'))).toEqual([
-      'Headquarters: 7 incidents',
-      'Riverside Annex: 3 incidents',
+    expect(Array.from(chart.querySelectorAll('path[aria-label]')).map((rect) => rect.getAttribute('aria-label'))).toEqual([
+      'Headquarters: 7 incidents, 70%',
+      'Riverside Annex: 3 incidents, 30%',
     ])
-    expect(names(buildings, 'Critical')).toEqual(['Headquarters1', 'Riverside Annex0'])
+    expect(names(buildings, 'Critical')).toEqual(['Headquarters1100%'])
     expect(screen.getByRole('button', { name: 'Last 30 days' })).toHaveAttribute('aria-pressed', 'true')
 
     await userEvent.click(within(buildings).getByRole('button', { name: 'View as table' }))
@@ -82,11 +82,11 @@ describe('IncidentOverview', () => {
 
     const engineers = await screen.findByRole('region', { name: 'Engineers' })
     const chart = await within(engineers).findByRole('img', { name: 'Incidents per engineer, completed and still open' })
-    const legend = within(engineers).getByRole('list', { name: 'Series' })
-    expect(within(legend).getAllByRole('listitem').map((item) => item.textContent)).toEqual(['Completed', 'Open'])
-    expect(Array.from(chart.querySelectorAll('rect[aria-label]')).map((rect) => rect.getAttribute('aria-label'))).toEqual([
-      'Hank Vance: 5 incidents',
-      'Ida Lupin: 2 incidents',
+    const legend = within(engineers).getByRole('list', { name: 'Slices' })
+    expect(within(legend).getAllByRole('listitem').map((item) => item.textContent)).toEqual(['Hank Vance571%', 'Ida Lupin229%'])
+    expect(Array.from(chart.querySelectorAll('path[aria-label]')).map((rect) => rect.getAttribute('aria-label'))).toEqual([
+      'Hank Vance: 5 incidents, 71%',
+      'Ida Lupin: 2 incidents, 29%',
     ])
 
     await userEvent.click(within(engineers).getByRole('button', { name: 'View as table' }))
