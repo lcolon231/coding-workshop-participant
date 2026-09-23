@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link as RouterLink, useLocation, useSearchParams } from 'react-router-dom'
+import { usePageTitle } from '../lib/usePageTitle'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Checkbox from '@mui/material/Checkbox'
@@ -192,6 +193,7 @@ function IncidentCards({ items, loading }) {
 }
 
 export default function IncidentsPage() {
+  usePageTitle('Incidents')
   const { user } = useAuth()
   // One layout at a time: the table above `md`, stacked rows below it.
   const wide = useWide()

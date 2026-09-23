@@ -8,6 +8,7 @@ import { useAuth } from './auth/AuthContext'
 import RequireRole from './auth/RequireRole'
 import AppShell from './components/AppShell'
 import OfflineBanner from './components/OfflineBanner'
+import RouteFocus from './components/RouteFocus'
 import WakingBanner from './components/WakingBanner'
 import FacilitiesPage from './pages/FacilitiesPage'
 import IncidentPage from './pages/IncidentPage'
@@ -76,6 +77,7 @@ function RequireUser({ children }) {
 export default function App() {
   return (
     <>
+      <RouteFocus />
       <OfflineBanner />
       <WakingBanner />
       <Routes>

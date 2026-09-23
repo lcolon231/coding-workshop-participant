@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { usePageTitle } from '../lib/usePageTitle'
 import { useSearchParams } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import FormControlLabel from '@mui/material/FormControlLabel'
@@ -26,6 +27,7 @@ const TABS = [
  * panels' own selection, so the whole view is linkable.
  */
 export default function FacilitiesPage() {
+  usePageTitle('Facilities')
   const [searchParams, setSearchParams] = useSearchParams()
   const tab = TABS.some((item) => item.value === searchParams.get('tab')) ? searchParams.get('tab') : 'buildings'
   const retired = searchParams.get('retired') === '1'

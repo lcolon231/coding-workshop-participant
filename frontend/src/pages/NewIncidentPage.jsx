@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { usePageTitle } from '../lib/usePageTitle'
 import { Link as RouterLink, useNavigate } from 'react-router-dom'
 import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
@@ -82,6 +83,7 @@ const loadBuildings = () => listBuildings()
 const loadCategories = () => listCategories()
 
 export default function NewIncidentPage() {
+  usePageTitle('Report an incident')
   const navigate = useNavigate()
   const [values, setValues] = useState(EMPTY)
   const [fieldErrors, setFieldErrors] = useState({})

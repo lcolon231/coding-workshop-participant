@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { usePageTitle } from '../lib/usePageTitle'
 import { useSearchParams } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -223,6 +224,7 @@ function UserCards({ items, loading, selfId, actions }) {
 }
 
 export default function UsersPage() {
+  usePageTitle('Users')
   const { user: me } = useAuth()
   const wide = useWide()
   const [searchParams, setSearchParams] = useSearchParams()
