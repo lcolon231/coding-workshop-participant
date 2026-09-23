@@ -1,0 +1,99 @@
+%% ACME Facility Incident Management -- system architecture
+%% One diagram: the runtime topology in both environments, the Lambda internals,
+%% and the build path that vendors the shared kernel into each service.
+%% Sources: infra/cloudfront.tf, infra/lambda.tf, infra/rds.tf, infra/locals.tf,
+%% backend/*/function.py, acme_core/api.py, tools/devserver.py, frontend/vite.config.js, Makefile.
+%% Solid = built. Dashed = planned (facilities service, Phase 4 in docs/design/tasks.md).
+
+flowchart TB
+    classDef browser fill:#eef3ff,stroke:#3b5bdb,color:#1c2f80
+    classDef edge fill:#fff4e0,stroke:#d9822b,color:#7a4200
+    classDef compute fill:#e8f7ee,stroke:#2f9e44,color:#1b5e2b
+    classDef data fill:#f3ecff,stroke:#7048e8,color:#3b1f8a
+    classDef tooling fill:#f1f3f5,stroke:#868e96,color:#343a40
+    classDef planned fill:#ffffff,stroke:#adb5bd,color:#868e96,stroke-dasharray:5 5
+
+    subgraph Client["Browser"]
+        SPA["React 19 SPA<br/>MUI 9 + react-router 7<br/>tokens in sessionStorage<br/>api.js: one refresh-and-retry on 401"]
+    end
+    class SPA browser
+
+    subgraph Local["Local development (no LocalStack)"]
+        Vite["Vite dev server :3000<br/>proxy /api -> :8000 unrewritten"]
+        Uvicorn["uvicorn :8000<br/>tools/devserver.py mounts every service's create_app()<br/>SERVICE=x runs one, Lambda-faithful"]
+        PGLocal[("PostgreSQL 5432<br/>native, localhost")]
+    end
+    class Vite,Uvicorn tooling
+    class PGLocal data
+
+    subgraph AWS["AWS (Terraform in infra/)"]
+        CF["CloudFront distribution<br/>redirect-to-https<br/>404 -> 200 /index.html (ttl 300 s)"]
+        S3[("S3 website bucket<br/>frontend/dist via OAC")]
+
+        subgraph Lambdas["Lambda functions: python3.13, 128 MB, 300 s, Function URL auth NONE"]
+            AuthFn["auth Lambda<br/>/api/auth/*<br/>register login refresh logout me users"]
+            IncFn["incidents Lambda<br/>/api/incidents/*<br/>incidents notes history escalations reports workflow"]
+            FacFn["facilities Lambda<br/>/api/facilities/*<br/>buildings floors seats categories engineers"]
+        end
+        DLQ[["SQS dead-letter queue<br/>one per function"]]
+        Aurora[("Aurora PostgreSQL 17.7<br/>Serverless v2, 0 to 4 ACU<br/>not public, encrypted<br/>sslmode=require from Lambda")]
+    end
+    class CF edge
+    class S3,Aurora data
+    class AuthFn,IncFn compute
+    class FacFn planned
+    class DLQ tooling
+
+    subgraph Inside["Inside each Lambda (function.py)"]
+        Handler["handler(event, context)"]
+        Classify{"acme_core.lambda_entry.classify()<br/>pure, no I/O"}
+        Admin["admin_actions.run_admin_action<br/>migrate | seed | db-current<br/>vendored into auth only"]
+        Mangum["Mangum(app, lifespan=off)<br/>built lazily on first HTTP event"]
+        App["FastAPI app = create_app(service)<br/>routes at /api/&lt;service&gt;<br/>healthz readyz docs openapi.json under the prefix<br/>flat error envelope, JSON logs with request_id"]
+        Reject["raise RuntimeError<br/>fail closed, never falls through to Mangum"]
+    end
+    class Handler,Mangum,App compute
+    class Classify edge
+    class Admin,Reject tooling
+
+    subgraph Kernel["Shared kernel and build path"]
+        Shared["backend/_shared/acme_core<br/>config db errors api workflow scoping<br/>security models schemas migrations seed"]
+        Sync["tools/sync-shared.sh<br/>rsync + purge __pycache__ + _build_stamp.py<br/>make verify-sync gates make deploy"]
+        Vendored["backend/&lt;service&gt;/acme_core<br/>gitignored build artifact"]
+        TF["bin/deploy-backend.sh = terraform apply<br/>locals.tf discovers backend/*/requirements.txt<br/>zips each service dir"]
+        DbSh["tools/db.sh<br/>synchronous aws lambda invoke<br/>source=acme.admin.v1, checks build stamp"]
+    end
+    class Shared,Sync,Vendored,TF,DbSh tooling
+
+    %% Local path
+    SPA -->|"dev"| Vite
+    Vite -->|"/api/*"| Uvicorn
+    Uvicorn --> PGLocal
+
+    %% Cloud path
+    SPA -->|"https"| CF
+    CF -->|"default behaviour<br/>GET HEAD OPTIONS"| S3
+    CF -->|"/api/auth*"| AuthFn
+    CF -->|"/api/incidents*"| IncFn
+    CF -.->|"/api/facilities*"| FacFn
+    AuthFn --> Aurora
+    IncFn --> Aurora
+    FacFn -.-> Aurora
+    AuthFn -.->|"failed async invoke"| DLQ
+    IncFn -.->|"failed async invoke"| DLQ
+
+    %% Lambda internals
+    AuthFn -.->|"expands to"| Handler
+    Handler --> Classify
+    Classify -->|"admin command"| Admin
+    Classify -->|"Function URL request"| Mangum
+    Classify -->|"anything else"| Reject
+    Mangum --> App
+    Admin -->|"alembic upgrade / seed"| Aurora
+    App -->|"SQLAlchemy 2, psycopg 3<br/>pool_size=1"| Aurora
+
+    %% Build path
+    Shared --> Sync --> Vendored --> TF
+    TF -->|"deploys"| Lambdas
+    DbSh -->|"migrate-cloud / seed-cloud"| AuthFn
+    Uvicorn -.->|"imports _shared directly<br/>PYTHONPATH, never the vendored copy"| Shared

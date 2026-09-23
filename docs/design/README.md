@@ -10,6 +10,7 @@ Design artifacts for the backend scaffold and the `auth` vertical slice.
 | [tasks.md](tasks.md) | Every task required to complete the project, with status and gates. |
 | [reviews.md](reviews.md) | Findings from three review passes, with what was accepted and what was rejected and why. |
 | [plan-before-review.md](plan-before-review.md) | Revision 3, kept only so the reviews' effect can be diffed. Superseded. |
+| [diagrams/](diagrams/) | Mermaid sources, one diagram per file: `architecture.mmd` (runtime topology, Lambda internals, build path), `design.mmd` (the 12-table data model), `workflow.mmd` (incident status machine), `security.mmd` (trust boundaries, auth chain, credentials, admin path). |
 
 ## Reading order for `plan.md`
 

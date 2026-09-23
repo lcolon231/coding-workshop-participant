@@ -1,0 +1,92 @@
+%% ACME Facility Incident Management -- security model
+%% Trust boundaries, the per-request authentication chain, credential handling and the
+%% admin invocation path. Sources: acme_core/dependencies.py, security/{tokens,principal,
+%% passwords,secret}.py, scoping.py, lambda_entry.py, auth_service/service.py, infra/*.tf,
+%% .github/workflows/*. Numbered controls S1-S12 refer to docs/design/plan.md.
+
+flowchart TB
+    classDef boundary fill:#fff4e0,stroke:#d9822b,color:#7a4200
+    classDef check fill:#e8f7ee,stroke:#2f9e44,color:#1b5e2b
+    classDef reject fill:#ffe8e8,stroke:#e03131,color:#7a1010
+    classDef store fill:#f3ecff,stroke:#7048e8,color:#3b1f8a
+    classDef note fill:#f1f3f5,stroke:#868e96,color:#343a40
+
+    subgraph Boundaries["Trust boundaries"]
+        direction LR
+        Browser["Browser<br/>tokens in sessionStorage<br/>same-origin, no CORS middleware"]
+        Edge["CloudFront edge<br/>TLS only, path routing<br/>NOT a security boundary"]
+        FURL["Lambda Function URL<br/>auth NONE, publicly reachable<br/>bypasses CloudFront"]
+        Fn["Lambda / uvicorn process<br/>all authz enforced here"]
+        DB[("Aurora PostgreSQL<br/>not publicly accessible, encrypted<br/>sslmode=require<br/>password is a 3-word pet name: never a KDF input")]
+        Browser --> Edge --> FURL --> Fn --> DB
+    end
+    class Browser,Edge,FURL,Fn boundary
+    class DB store
+
+    subgraph Chain["Per-request authentication chain (dependencies.current_user)"]
+        direction TB
+        Bearer["Authorization: Bearer header"]
+        Decode{"decode_token<br/>alg pinned HS256 (S9)<br/>require sub typ jti iat exp iss aud<br/>typ must be access"}
+        Load{"load users row by sub<br/>role and is_active from the DB, not the claim (S7)"}
+        Active{"is_active?"}
+        Revoked{"iat >= sessions_valid_from?<br/>logout-all, password or role change bumps it"}
+        RoleGate{"role gate<br/>require_admin / require_staff<br/>runs before any row lookup"}
+        Scope["scope_incidents(select, principal)<br/>Admin: all<br/>Engineer: assignee_id OR reporter_id<br/>Employee: reporter_id<br/>notes: employees see public only"]
+        Rows["scoped SELECT ... FOR UPDATE<br/>one_or_none() -> NotFound<br/>never session.get() on a child (S6)"]
+        R401["401 unauthenticated / token_expired /<br/>wrong_token_type + WWW-Authenticate"]
+        R403["403 forbidden<br/>only when the row is already visible"]
+        R404["404 not_found<br/>out of scope == nonexistent (S6)"]
+        Bearer --> Decode
+        Decode -->|"invalid"| R401
+        Decode -->|"ok"| Load
+        Load -->|"no row"| R401
+        Load --> Active
+        Active -->|"no"| R401
+        Active -->|"yes"| Revoked
+        Revoked -->|"no"| R401
+        Revoked -->|"yes"| RoleGate
+        RoleGate -->|"wrong role"| R403
+        RoleGate -->|"ok"| Scope --> Rows
+        Rows -->|"filtered out"| R404
+    end
+    class Bearer,Scope,Rows check
+    class Decode,Load,Active,Revoked,RoleGate check
+    class R401,R403,R404 reject
+
+    subgraph Creds["Credentials and secrets"]
+        direction TB
+        Secret["JWT secret (S1)<br/>app_secrets table, token_bytes(32)<br/>INSERT ON CONFLICT DO NOTHING, cached in process<br/>shared by every service, no env var, no Terraform"]
+        Login["login (S8)<br/>bcrypt always runs, dummy hash when no user<br/>one message for wrong password, locked, inactive<br/>lockout 15 min after 5 failures, never IP based"]
+        Register["register<br/>@acme.inc only, min 12 chars, max 72 bytes (S10)<br/>202 identical whether or not the email exists<br/>role always Employee, body is extra=forbid (S5)"]
+        Refresh["refresh rotation<br/>token hash stored, raw never persisted<br/>each pair in a family_id<br/>reuse of a rotated token revokes the whole family"]
+        Envelope["error envelope (S3)<br/>details[] from an allowlist {field, message}<br/>passwords and tokens never echoed or logged<br/>500 message scrubbed, request_id kept"]
+    end
+    class Secret,Login,Register,Refresh,Envelope check
+
+    subgraph AdminPath["Admin invocation (S2, S11)"]
+        direction TB
+        Invoke["tools/db.sh: synchronous aws lambda invoke<br/>IAM lambda:InvokeFunction is the authorisation"]
+        Classify{"classify(event)<br/>positive match only:<br/>source == acme.admin.v1<br/>no HTTP keys<br/>action in {migrate, seed, db-current}"}
+        Seed["seed: admin password from the payload, never in source<br/>refused unless options.confirm == APP_ID<br/>strictly additive"]
+        Fail["RuntimeError, invocation refused<br/>no fall-through to the web stack"]
+        Invoke --> Classify
+        Classify -->|"match"| Seed
+        Classify -->|"anything else"| Fail
+    end
+    class Invoke,Seed check
+    class Classify check
+    class Fail reject
+
+    subgraph Supply["Supply chain and CI"]
+        direction LR
+        CI["GitHub Actions<br/>bandit -r ./backend<br/>npm audit --audit-level=high<br/>Checkov on infra/"]
+        Pins["runtime deps pinned ==<br/>no passlib, no python-jose<br/>pip-audit via make audit"]
+        Sync["make deploy = sync + verify-sync<br/>stale vendored kernel cannot ship silently"]
+    end
+    class CI,Pins,Sync note
+
+    Fn -.->|"every authenticated route"| Bearer
+    Decode -.->|"verifies with"| Secret
+    Login -.->|"issues access 30 min + refresh 7 d"| Refresh
+    FURL -.->|"admin events"| Invoke
+    Seed --> DB

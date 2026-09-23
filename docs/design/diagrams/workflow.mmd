@@ -1,0 +1,37 @@
+%% ACME Facility Incident Management -- incident status machine
+%% Mirrors TRANSITIONS and STAMP_ON_ENTER in backend/_shared/acme_core/workflow.py.
+%% Every status change goes through POST /api/incidents/{id}/transition, which checks
+%% edge -> actor -> required fields in that order (409 invalid_transition, 403 forbidden,
+%% 400 validation_error). Admin bypasses the actor check but never the required fields.
+%% Closed is terminal only because no rule has it as a source.
+
+stateDiagram-v2
+    direction LR
+
+    state "In Progress" as InProgress
+
+    [*] --> Open : POST /api/incidents<br/>reporter = principal<br/>history row null -> Open
+
+    Open --> InProgress : Admin or any Engineer<br/>requires an assignee<br/>stamps acknowledged_at, assigned_at (first only)
+    Open --> Closed : Admin<br/>requires resolution_note<br/>stamps closed_at
+
+    InProgress --> Blocked : Admin or assigned Engineer<br/>requires blocked_reason
+    Blocked --> InProgress : Admin or assigned Engineer<br/>clears blocked_reason, history keeps it
+
+    InProgress --> Resolved : Admin or assigned Engineer<br/>requires resolution_note<br/>stamps resolved_at (latest)
+
+    Resolved --> Closed : Admin or reporter<br/>confirm and close<br/>stamps closed_at (latest)
+    Resolved --> InProgress : Admin or reporter<br/>reopen, resolved_at overwritten next time
+
+    Closed --> [*]
+
+    note right of Open
+        Unassigned incidents are invisible to engineers
+        (scope_incidents), so the Open -> In Progress edge
+        is reached only after an admin assigns via PUT.
+    end note
+
+    note right of Closed
+        Immutable: PUT is 409 conflict, notes are 409,
+        escalations are 409, no outgoing edge exists.
+    end note
