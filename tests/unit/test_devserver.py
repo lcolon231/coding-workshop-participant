@@ -15,7 +15,7 @@ pytestmark = pytest.mark.unit
 class TestDiscovery:
     def test_finds_every_deployable_service(self) -> None:
         found = devserver.discover_services()
-        assert "auth" in found and "incidents" in found
+        assert {"auth", "incidents", "facilities"} <= set(found)
         assert not any(name.startswith("_") for name in found)
 
 
@@ -25,14 +25,14 @@ class TestCombined:
         monkeypatch.delenv("ACME_SERVICE_NAME", raising=False)
         return TestClient(devserver.app(), raise_server_exceptions=False)
 
-    @pytest.mark.parametrize("service", ["auth", "incidents"])
+    @pytest.mark.parametrize("service", ["auth", "incidents", "facilities"])
     def test_each_prefix_reaches_its_own_service(self, client: TestClient, service: str) -> None:
         """/healthz builds no engine, so this runs under the unit tier's no-I/O guard."""
         resp = client.get(f"/api/{service}/healthz")
         assert resp.status_code == 200
         assert resp.json()["service"] == service
 
-    @pytest.mark.parametrize("service", ["auth", "incidents"])
+    @pytest.mark.parametrize("service", ["auth", "incidents", "facilities"])
     def test_each_service_keeps_its_own_docs(self, client: TestClient, service: str) -> None:
         schema = client.get(f"/api/{service}/openapi.json").json()
         prefix = f"/api/{service}"
@@ -111,6 +111,6 @@ class TestSingle:
     def test_a_service_without_a_package_gets_the_shared_routes(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        monkeypatch.setenv("ACME_SERVICE_NAME", "facilities")
+        monkeypatch.setenv("ACME_SERVICE_NAME", "widgets")
         client = TestClient(devserver.app(), raise_server_exceptions=False)
-        assert client.get("/api/facilities/healthz").json()["service"] == "facilities"
+        assert client.get("/api/widgets/healthz").json()["service"] == "widgets"

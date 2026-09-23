@@ -1,0 +1,10 @@
+# Build artifacts. acme_core/ is vendored here by tools/sync-shared.sh; the
+# source of truth is backend/_shared/acme_core.
+#
+# An allowlist (`*` plus negations) is deliberately NOT used: it silently
+# swallows every new source file added later. Terraform's pip_requirements
+# install targets a temp build directory, not this one, so the only artifacts
+# that appear here are the ones listed below.
+/acme_core/
+__pycache__/
+.pytest_cache/
