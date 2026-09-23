@@ -201,7 +201,6 @@ app/db
 # Node.js
 node_modules/
 npm-debug.log*
-package-lock.json*
 yarn-debug.log*
 yarn-error.log*
 
@@ -243,6 +242,9 @@ frontend/node_modules/
 # Keep package.json for participant setup
 !frontend/package.json
 !frontend/README.md
+# The Python `lib/` rule above would otherwise hide the frontend's own
+# helper modules; CI caught src/lib/ never reaching the repository.
+!frontend/src/lib/
 
 # Terraform plan files
 tfplan

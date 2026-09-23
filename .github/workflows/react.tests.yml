@@ -1,0 +1,45 @@
+name: Tests - React
+
+on: [pull_request, push]
+
+jobs:
+  vitest:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # npm ci, not npm install: fails if package.json and the lockfile
+      # disagree instead of quietly rewriting the lockfile.
+      - name: Install npm dependencies
+        run: npm ci --prefix ./frontend
+
+      - name: Lint
+        run: npm run lint --prefix ./frontend
+
+      - name: Test
+        run: npm test --prefix ./frontend
+
+      # No threshold yet: T96 sets the ratchet from a measured number
+      # (84.77% statements on 2026-09-22).
+      - name: Test with coverage
+        run: npm run test:coverage --prefix ./frontend
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage
+          path: frontend/coverage/
+          retention-days: 14
