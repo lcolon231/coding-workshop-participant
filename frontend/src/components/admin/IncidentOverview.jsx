@@ -14,15 +14,25 @@ import { formatDuration } from '../../lib/format'
 import { RANGE_PRESETS, buildingBars, engineerBars, rangeEnding } from '../../lib/reports'
 import { useLoad } from '../../lib/useLoad'
 import { fetchBuildings, fetchEngineers } from '../../services/reports'
-import BarList from '../charts/BarList'
+import PieChart from '../charts/PieChart'
 import StackedBars from '../charts/StackedBars'
 import { EmptyState, LoadError } from '../PageState'
 
 const DEFAULT_DAYS = 30
 
-/** The rows re-ranked by one count, largest first, as bar-list items. */
-function ranked(rows, label, count) {
-  return [...rows].sort((a, b) => count(b) - count(a)).map((row) => ({ key: label(row), count: count(row) }))
+/**
+ * Stacked-bar rows as pie slices: one per row, its total the value, its
+ * segments the tooltip detail, its colour pinned by `slots` (a map from row
+ * key to slot) so the same thing keeps its hue across charts.
+ */
+function slicesOf(rows, series, slots) {
+  return rows.map((row) => ({
+    key: row.key,
+    label: row.label,
+    value: row.total,
+    slot: slots.get(row.key),
+    detail: series.map((entry) => ({ name: entry.name, value: row.values[entry.name] })),
+  }))
 }
 
 function Section({ id, title, action, children }) {
@@ -86,9 +96,9 @@ function EngineerTable({ rows }) {
  * and what each engineer holds and has completed, over the last 7, 30 or
  * 90 days. Each half loads and retries on its own.
  *
- * Both charts are stacked bars with the same two slots, finished then
- * open, so the eye reads "how much is left" the same way in each; the
- * numbers stay reachable through the table views and the workload table.
+ * Each chart is a donut of the share per building or engineer, with the
+ * finished/open split in the tooltip; the numbers stay reachable through
+ * the table views and the workload table.
  */
 export default function IncidentOverview() {
   const [days, setDays] = useState(DEFAULT_DAYS)
@@ -107,6 +117,10 @@ export default function IncidentOverview() {
   const buildingChart = buildingBars(buildingRows)
   const engineerChart = engineerBars(engineerRows)
   const critical = [{ name: 'Critical', value: (row) => row.critical }]
+  // Colour by building rank in the main chart, so the critical chart matches.
+  const buildingSlots = new Map(buildingChart.rows.map((row, index) => [row.key, index]))
+  const engineerSlots = new Map(engineerChart.rows.map((row, index) => [row.key, index]))
+  const criticalSlices = buildingChart.rows.map((row) => ({ key: row.key, label: row.label, value: row.critical, slot: buildingSlots.get(row.key) }))
 
   return (
     <Box component="section" aria-labelledby="overview-heading" sx={{ p: { xs: 2, md: 3 }, border: 1, borderColor: 'divider', borderRadius: 1, bgcolor: 'background.paper', boxShadow: 1 }}>
@@ -154,16 +168,29 @@ export default function IncidentOverview() {
           ) : buildingsTotal === 0 ? (
             <EmptyState title="No incidents in this range" body="Buildings rank by incidents once something has been reported." />
           ) : (
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '2fr 1fr' }, gap: 4, opacity: buildings.loading ? 0.6 : 1 }}>
-              <StackedBars
-                rows={buildingChart.rows}
-                series={buildingChart.series}
-                extras={critical}
-                table={buildingsTable}
-                ariaLabel="Incidents per building, finished and still open"
-                tableLabel="Building"
-              />
-              {!buildingsTable && <BarList title="Critical" items={ranked(buildingRows, (row) => row.building, (row) => row.critical_count)} />}
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: buildingsTable ? '1fr' : '1fr 1fr' }, gap: 4, opacity: buildings.loading ? 0.6 : 1 }}>
+              {buildingsTable ? (
+                <StackedBars rows={buildingChart.rows} series={buildingChart.series} extras={critical} table tableLabel="Building" />
+              ) : (
+                <>
+                  <PieChart
+                    slices={slicesOf(buildingChart.rows, buildingChart.series, buildingSlots)}
+                    ariaLabel="Incidents per building, finished and still open"
+                  />
+                  <Box component="section" aria-labelledby="overview-critical" sx={{ minWidth: 0 }}>
+                    <Typography component="h4" variant="body1" id="overview-critical" sx={{ fontWeight: 600, mb: 1.5 }}>
+                      Critical
+                    </Typography>
+                    {criticalSlices.some((slice) => slice.value > 0) ? (
+                      <PieChart slices={criticalSlices} ariaLabel="Critical incidents per building" unit="critical" />
+                    ) : (
+                      <Typography variant="body2" color="text.secondary">
+                        Nothing in this range.
+                      </Typography>
+                    )}
+                  </Box>
+                </>
+              )}
             </Box>
           )}
         </Section>
@@ -185,11 +212,9 @@ export default function IncidentOverview() {
           ) : (
             <Stack spacing={3} sx={{ opacity: engineers.loading ? 0.6 : 1 }}>
               {engineersTotal > 0 && !engineersTable && (
-                <StackedBars
-                  rows={engineerChart.rows}
-                  series={engineerChart.series}
+                <PieChart
+                  slices={slicesOf(engineerChart.rows, engineerChart.series, engineerSlots)}
                   ariaLabel="Incidents per engineer, completed and still open"
-                  tableLabel="Engineer"
                 />
               )}
               {(engineersTotal === 0 || engineersTable) && (
