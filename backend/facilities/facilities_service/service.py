@@ -26,12 +26,15 @@ from sqlalchemy.orm import Session
 
 from acme_core.exceptions import Conflict, NotFound, ValidationFailed
 from acme_core.logging_config import get_logger
-from acme_core.models import Building, Floor, Seat
+from acme_core.models import Building, Category, Floor, Seat
 from acme_core.schemas.common import UpdateModel
 from acme_core.schemas.facility import (
     BuildingCreate,
     BuildingFilters,
     BuildingUpdate,
+    CategoryCreate,
+    CategoryFilters,
+    CategoryUpdate,
     FloorCreate,
     FloorFilters,
     FloorUpdate,
@@ -50,8 +53,8 @@ def _lists_inactive(principal: Principal, filters: Any) -> bool:
     return principal.is_admin and bool(filters.include_inactive)
 
 
-def _plural(count: int, noun: str) -> str:
-    return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
+def _plural(count: int, noun: str, plural: str | None = None) -> str:
+    return f"{count} {noun}" if count == 1 else f"{count} {plural or noun + 's'}"
 
 
 def _missing(field: str, message: str) -> ValidationFailed:
@@ -348,3 +351,110 @@ def delete_seat(session: Session, principal: Principal, seat_id: uuid.UUID) -> N
     session.delete(seat)
     _flush_or_conflict(session, "Seat is still referenced; deactivate it instead.")
     _logger.info("seat_deleted", extra={"seat_id": str(seat_id)})
+
+
+# --------------------------------------------------------------------------- categories
+
+_CATEGORY_TAKEN = "A category with this name already exists at this level."
+
+
+def _require_category(
+    session: Session, principal: Principal, category_id: uuid.UUID, *, for_update: bool = False
+) -> Category:
+    """Load a category the caller may see, or raise the answer an invisible one gets."""
+    category = repo.get_category(
+        session, category_id, include_inactive=principal.is_admin, for_update=for_update
+    )
+    if category is None:
+        raise NotFound("Category not found.")
+    return category
+
+
+def list_categories(
+    session: Session, principal: Principal, filters: CategoryFilters
+) -> tuple[list[Category], int]:
+    """Page through the categories this caller may see, flat."""
+    return repo.list_categories(
+        session, filters, include_inactive=_lists_inactive(principal, filters)
+    )
+
+
+def get_category(session: Session, principal: Principal, category_id: uuid.UUID) -> Category:
+    """Fetch one category.
+
+    Raises:
+        NotFound: No such category, or it is retired and the caller is not an admin.
+    """
+    return _require_category(session, principal, category_id)
+
+
+def create_category(session: Session, body: CategoryCreate) -> Category:
+    """Create a root category, or a child of an existing root.
+
+    The tree has two levels, so the parent must itself be a root. A retired
+    parent is accepted: an admin may be rebuilding a branch before reviving it.
+
+    Raises:
+        ValidationFailed: The parent does not exist or is not top-level.
+        Conflict: A sibling already carries this name.
+    """
+    if body.parent_id is not None:
+        parent = repo.get_category(session, body.parent_id, include_inactive=True)
+        if parent is None or parent.parent_id is not None:
+            raise _missing("parent_id", "Parent must be an existing top-level category.")
+    elif repo.root_named(session, body.name):
+        raise Conflict(_CATEGORY_TAKEN)
+    category = Category(name=body.name, parent_id=body.parent_id, description=body.description)
+    session.add(category)
+    _flush_or_conflict(session, _CATEGORY_TAKEN)
+    _logger.info("category_created", extra={"category_id": str(category.id)})
+    return category
+
+
+def update_category(
+    session: Session, principal: Principal, category_id: uuid.UUID, body: CategoryUpdate
+) -> Category:
+    """Apply an admin's edits to a category. Re-parenting is not supported.
+
+    Deactivating a root leaves its children as they are: the client builds
+    the tree from active roots, so they simply stop being offered.
+
+    Raises:
+        NotFound: No such category.
+        Conflict: The new name is already carried by a sibling.
+    """
+    category = _require_category(session, principal, category_id, for_update=True)
+    changes = body.changes()
+    if (
+        "name" in changes
+        and category.parent_id is None
+        and repo.root_named(session, changes["name"], excluding=category.id)
+    ):
+        raise Conflict(_CATEGORY_TAKEN)
+    _apply(category, body)
+    _flush_or_conflict(session, _CATEGORY_TAKEN)
+    return category
+
+
+def delete_category(session: Session, principal: Principal, category_id: uuid.UUID) -> None:
+    """Delete a category nothing depends on.
+
+    Both foreign keys restrict, and the children relationship lets the
+    database see the delete (passive_deletes), so a refusal here is belt and
+    braces; the pre-check exists so the answer names what is in the way.
+
+    Raises:
+        NotFound: No such category.
+        Conflict: It still has sub-categories, or incidents still carry it.
+    """
+    category = _require_category(session, principal, category_id, for_update=True)
+    children = repo.count_children(session, category.id)
+    incidents = repo.count_incidents_in_category(session, category.id)
+    if children or incidents:
+        raise Conflict(
+            f"Category has {_plural(children, 'sub-category', 'sub-categories')} and "
+            f"{_plural(incidents, 'incident')}; deactivate it instead."
+        )
+    session.delete(category)
+    _flush_or_conflict(session, "Category is still referenced; deactivate it instead.")
+    _logger.info("category_deleted", extra={"category_id": str(category_id)})

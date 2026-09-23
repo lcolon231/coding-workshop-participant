@@ -28,6 +28,10 @@ from acme_core.schemas.facility import (
     BuildingFilters,
     BuildingOut,
     BuildingUpdate,
+    CategoryCreate,
+    CategoryFilters,
+    CategoryOut,
+    CategoryUpdate,
     FloorCreate,
     FloorFilters,
     FloorOut,
@@ -281,4 +285,80 @@ def update_seat(
 def delete_seat(seat_id: uuid.UUID, admin: AdminPrincipal, session: DbSession) -> Response:
     """Refused while incidents name the seat; deactivate it instead."""
     service.delete_seat(session, admin, seat_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# --------------------------------------------------------------------------- categories
+
+
+@router.get(
+    "/categories",
+    response_model=Page[CategoryOut],
+    responses=error_responses(400, 401),
+    tags=["categories"],
+    summary="List categories",
+)
+def list_categories(
+    caller: CurrentPrincipal, session: DbSession, filters: Annotated[CategoryFilters, Query()]
+) -> Page[CategoryOut]:
+    """A flat list; build the two-level tree from `parent_id`."""
+    rows, total = service.list_categories(session, caller, filters)
+    return _page(CategoryOut, rows, total, filters)
+
+
+@router.post(
+    "/categories",
+    status_code=status.HTTP_201_CREATED,
+    response_model=CategoryOut,
+    responses=error_responses(400, 401, 403, 409),
+    tags=["categories"],
+    summary="Create a category",
+)
+def create_category(
+    body: CategoryCreate, _admin: AdminPrincipal, session: DbSession, response: Response
+) -> CategoryOut:
+    """Add a root category, or a child of one. The tree has two levels."""
+    category = service.create_category(session, body)
+    response.headers["Location"] = f"{PREFIX}/categories/{category.id}"
+    return CategoryOut.model_validate(category)
+
+
+@router.get(
+    "/categories/{category_id}",
+    response_model=CategoryOut,
+    responses=error_responses(401, 404),
+    tags=["categories"],
+    summary="One category",
+)
+def get_category(
+    category_id: uuid.UUID, caller: CurrentPrincipal, session: DbSession
+) -> CategoryOut:
+    """A category; retired ones are visible to admins only."""
+    return CategoryOut.model_validate(service.get_category(session, caller, category_id))
+
+
+@router.put(
+    "/categories/{category_id}",
+    response_model=CategoryOut,
+    responses=error_responses(400, 401, 403, 404, 409),
+    tags=["categories"],
+    summary="Update a category",
+)
+def update_category(
+    category_id: uuid.UUID, body: CategoryUpdate, admin: AdminPrincipal, session: DbSession
+) -> CategoryOut:
+    """Partial update of name, description or active flag. Re-parenting is not supported."""
+    return CategoryOut.model_validate(service.update_category(session, admin, category_id, body))
+
+
+@router.delete(
+    "/categories/{category_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses=error_responses(401, 403, 404, 409),
+    tags=["categories"],
+    summary="Delete an unused category",
+)
+def delete_category(category_id: uuid.UUID, admin: AdminPrincipal, session: DbSession) -> Response:
+    """Refused while the category has children or incidents carry it."""
+    service.delete_category(session, admin, category_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

@@ -181,6 +181,9 @@ class Api:
         body = {"floor_id": str(self.world.ground.id), "code": "1-03", **overrides}
         return self._create("seats", headers, body)
 
+    def category(self, headers: dict[str, str], **overrides: Any) -> dict[str, Any]:
+        return self._create("categories", headers, {"name": "Workplace", **overrides})
+
 
 @pytest.fixture
 def api(facilities_client: TestClient, world: World) -> Api:
@@ -203,7 +206,7 @@ def stored(session: Session, model: type, row_id: Any) -> Any:
 
 class TestRouteContract:
     PUBLIC = {("GET", f"{P}/healthz"), ("GET", f"{P}/readyz")}
-    PROTECTED_ROUTES = 15
+    PROTECTED_ROUTES = 20
 
     def test_every_other_route_rejects_an_anonymous_caller(
         self, facilities_client: TestClient
@@ -879,4 +882,305 @@ class TestSeatDelete:
         self, facilities_client: TestClient, actors: Actors
     ) -> None:
         resp = facilities_client.delete(f"{P}/seats/{uuid.uuid4()}", headers=actors.admin)
+        assert resp.status_code == 404
+
+
+# --------------------------------------------------------------------------- categories
+
+
+class TestCategoryList:
+    def test_non_admins_see_active_categories_flat_by_name(
+        self, facilities_client: TestClient, actors: Actors, world: World
+    ) -> None:
+        page = facilities_client.get(f"{P}/categories", headers=actors.employee).json()
+        assert [(c["name"], c["parent_id"]) for c in page["items"]] == [
+            ("Facilities", None),
+            ("HVAC", str(world.facilities.id)),
+        ]
+        assert page["total"] == 2
+
+    def test_include_inactive_is_honoured_for_admins_only(
+        self, facilities_client: TestClient, actors: Actors
+    ) -> None:
+        params = {"include_inactive": "true"}
+        mine = facilities_client.get(f"{P}/categories", params=params, headers=actors.employee)
+        theirs = facilities_client.get(f"{P}/categories", params=params, headers=actors.admin)
+        assert mine.json()["total"] == 2
+        assert [c["name"] for c in theirs.json()["items"]] == ["Facilities", "HVAC", "Retired"]
+
+    def test_roots_only_and_children_of_a_parent(
+        self, facilities_client: TestClient, actors: Actors, world: World
+    ) -> None:
+        roots = facilities_client.get(
+            f"{P}/categories", params={"roots_only": "true"}, headers=actors.employee
+        )
+        assert [c["name"] for c in roots.json()["items"]] == ["Facilities"]
+        children = facilities_client.get(
+            f"{P}/categories",
+            params={"parent_id": str(world.facilities.id)},
+            headers=actors.employee,
+        )
+        assert [c["name"] for c in children.json()["items"]] == ["HVAC"]
+
+    def test_an_unknown_parent_filter_is_an_empty_page(
+        self, facilities_client: TestClient, actors: Actors
+    ) -> None:
+        resp = facilities_client.get(
+            f"{P}/categories", params={"parent_id": str(uuid.uuid4())}, headers=actors.employee
+        )
+        assert resp.status_code == 200
+        assert (resp.json()["items"], resp.json()["total"]) == ([], 0)
+
+    def test_roots_only_and_parent_id_cannot_combine(
+        self, facilities_client: TestClient, actors: Actors, world: World
+    ) -> None:
+        resp = facilities_client.get(
+            f"{P}/categories",
+            params={"roots_only": "true", "parent_id": str(world.facilities.id)},
+            headers=actors.employee,
+        )
+        assert (resp.status_code, resp.json()["error"]) == (400, "validation_error")
+
+    def test_search_matches_the_name(self, facilities_client: TestClient, actors: Actors) -> None:
+        resp = facilities_client.get(
+            f"{P}/categories", params={"search": "hv"}, headers=actors.employee
+        )
+        assert [c["name"] for c in resp.json()["items"]] == ["HVAC"]
+
+
+class TestCategoryGet:
+    def test_the_404_200_pair_on_the_same_retired_id(
+        self, facilities_client: TestClient, actors: Actors, world: World
+    ) -> None:
+        url = f"{P}/categories/{world.retired_category.id}"
+        hidden = facilities_client.get(url, headers=actors.employee)
+        assert (hidden.status_code, hidden.json()["error"]) == (404, "not_found")
+        assert facilities_client.get(url, headers=actors.admin).status_code == 200
+
+    def test_returns_the_category(
+        self, facilities_client: TestClient, actors: Actors, world: World
+    ) -> None:
+        body = facilities_client.get(f"{P}/categories/{world.hvac.id}", headers=actors.engineer)
+        assert body.json() == {
+            "id": str(world.hvac.id),
+            "name": "HVAC",
+            "parent_id": str(world.facilities.id),
+            "description": None,
+            "is_active": True,
+        }
+
+
+class TestCategoryCreate:
+    def test_creates_a_root_and_points_at_it(
+        self, facilities_client: TestClient, actors: Actors, verify_session: Session
+    ) -> None:
+        resp = facilities_client.post(
+            f"{P}/categories",
+            json={"name": "Workplace", "description": "Desks and chairs"},
+            headers=actors.admin,
+        )
+        assert resp.status_code == 201, resp.text
+        assert resp.headers["Location"] == f"{P}/categories/{resp.json()['id']}"
+        row = stored(verify_session, Category, resp.json()["id"])
+        assert (row.name, row.parent_id, row.description) == ("Workplace", None, "Desks and chairs")
+
+    def test_creates_a_child_of_a_root(
+        self, facilities_client: TestClient, actors: Actors, api: Api, world: World
+    ) -> None:
+        created = api.category(actors.admin, name="Lighting", parent_id=str(world.facilities.id))
+        assert created["parent_id"] == str(world.facilities.id)
+
+    def test_a_child_may_share_a_name_with_a_root(
+        self, facilities_client: TestClient, actors: Actors, api: Api, world: World
+    ) -> None:
+        """Sibling names must differ; the same name under a different parent is fine."""
+        assert api.category(actors.admin, name="HVAC")["parent_id"] is None
+
+    @pytest.mark.parametrize("parent", ["hvac", "missing"])
+    def test_the_parent_must_be_an_existing_root(
+        self, facilities_client: TestClient, actors: Actors, world: World, parent: str
+    ) -> None:
+        parent_id = str(world.hvac.id) if parent == "hvac" else str(uuid.uuid4())
+        resp = facilities_client.post(
+            f"{P}/categories", json={"name": "Deep", "parent_id": parent_id}, headers=actors.admin
+        )
+        assert (resp.status_code, resp.json()["error"]) == (400, "validation_error")
+        assert [d["field"] for d in resp.json()["details"]] == ["parent_id"]
+
+    def test_a_duplicate_root_name_is_a_conflict(
+        self, facilities_client: TestClient, actors: Actors
+    ) -> None:
+        """Roots have a NULL parent, which the unique constraint cannot see; the service must."""
+        resp = facilities_client.post(
+            f"{P}/categories", json={"name": "Facilities"}, headers=actors.admin
+        )
+        assert (resp.status_code, resp.json()["error"]) == (409, "conflict")
+
+    def test_a_duplicate_sibling_name_is_a_conflict(
+        self, facilities_client: TestClient, actors: Actors, world: World
+    ) -> None:
+        resp = facilities_client.post(
+            f"{P}/categories",
+            json={"name": "HVAC", "parent_id": str(world.facilities.id)},
+            headers=actors.admin,
+        )
+        assert (resp.status_code, resp.json()["error"]) == (409, "conflict")
+
+    def test_non_admins_are_refused(self, facilities_client: TestClient, actors: Actors) -> None:
+        resp = facilities_client.post(
+            f"{P}/categories", json={"name": "X"}, headers=actors.employee
+        )
+        assert resp.status_code == 403
+
+
+class TestCategoryUpdate:
+    def test_renames_and_clears_the_description(
+        self, facilities_client: TestClient, actors: Actors, api: Api, verify_session: Session
+    ) -> None:
+        created = api.category(actors.admin, description="temp")
+        resp = facilities_client.put(
+            f"{P}/categories/{created['id']}",
+            json={"name": "Workspace", "description": None},
+            headers=actors.admin,
+        )
+        assert resp.status_code == 200, resp.text
+        row = stored(verify_session, Category, created["id"])
+        assert (row.name, row.description) == ("Workspace", None)
+
+    def test_renaming_a_root_onto_another_root_is_a_conflict(
+        self, facilities_client: TestClient, actors: Actors, api: Api
+    ) -> None:
+        created = api.category(actors.admin)
+        resp = facilities_client.put(
+            f"{P}/categories/{created['id']}", json={"name": "Facilities"}, headers=actors.admin
+        )
+        assert (resp.status_code, resp.json()["error"]) == (409, "conflict")
+
+    def test_renaming_a_child_onto_a_sibling_is_a_conflict(
+        self, facilities_client: TestClient, actors: Actors, api: Api, world: World
+    ) -> None:
+        sibling = api.category(actors.admin, name="Lighting", parent_id=str(world.facilities.id))
+        resp = facilities_client.put(
+            f"{P}/categories/{sibling['id']}", json={"name": "HVAC"}, headers=actors.admin
+        )
+        assert (resp.status_code, resp.json()["error"]) == (409, "conflict")
+
+    def test_renaming_to_its_own_name_is_fine(
+        self, facilities_client: TestClient, actors: Actors, world: World
+    ) -> None:
+        resp = facilities_client.put(
+            f"{P}/categories/{world.facilities.id}",
+            json={"name": "Facilities"},
+            headers=actors.admin,
+        )
+        assert resp.status_code == 200
+
+    @pytest.mark.parametrize("body", [{"name": None}, {"parent_id": None}])
+    def test_rejects_a_null_name_and_re_parenting(
+        self, facilities_client: TestClient, actors: Actors, world: World, body: dict[str, Any]
+    ) -> None:
+        resp = facilities_client.put(
+            f"{P}/categories/{world.hvac.id}", json=body, headers=actors.admin
+        )
+        assert (resp.status_code, resp.json()["error"]) == (400, "validation_error")
+
+    def test_deactivating_a_root_hides_it_but_not_its_children(
+        self, facilities_client: TestClient, actors: Actors, world: World
+    ) -> None:
+        """Documented, not cascaded: the client builds the tree from active roots."""
+        resp = facilities_client.put(
+            f"{P}/categories/{world.facilities.id}", json={"is_active": False}, headers=actors.admin
+        )
+        assert resp.json()["is_active"] is False
+        page = facilities_client.get(f"{P}/categories", headers=actors.employee).json()
+        assert [c["name"] for c in page["items"]] == ["HVAC"]
+
+    def test_an_unknown_category_is_not_found(
+        self, facilities_client: TestClient, actors: Actors
+    ) -> None:
+        resp = facilities_client.put(
+            f"{P}/categories/{uuid.uuid4()}", json={"name": "X"}, headers=actors.admin
+        )
+        assert resp.status_code == 404
+
+
+class TestCategoryDelete:
+    def test_a_leaf_is_deleted(
+        self, facilities_client: TestClient, actors: Actors, world: World, verify_session: Session
+    ) -> None:
+        resp = facilities_client.delete(f"{P}/categories/{world.hvac.id}", headers=actors.admin)
+        assert resp.status_code == 204
+        assert stored(verify_session, Category, world.hvac.id) is None
+
+    def test_a_parent_is_refused_and_its_children_keep_their_parent(
+        self, facilities_client: TestClient, actors: Actors, world: World, verify_session: Session
+    ) -> None:
+        parent_id, child_id = world.facilities.id, world.hvac.id
+        resp = facilities_client.delete(f"{P}/categories/{parent_id}", headers=actors.admin)
+        assert (resp.status_code, resp.json()["error"]) == (409, "conflict")
+        assert resp.json()["message"] == (
+            "Category has 1 sub-category and 0 incidents; deactivate it instead."
+        )
+        assert stored(verify_session, Category, parent_id) is not None
+        assert stored(verify_session, Category, child_id).parent_id == parent_id
+
+    def test_a_category_carried_by_an_incident_is_refused(
+        self,
+        facilities_client: TestClient,
+        actors: Actors,
+        world: World,
+        make_incident: Any,
+        verify_session: Session,
+    ) -> None:
+        category_id = world.hvac.id
+        incident_id = make_incident(category_id=category_id).id
+        resp = facilities_client.delete(f"{P}/categories/{category_id}", headers=actors.admin)
+        assert resp.status_code == 409
+        assert resp.json()["message"] == (
+            "Category has 0 sub-categories and 1 incident; deactivate it instead."
+        )
+        assert stored(verify_session, Incident, incident_id).category_id == category_id
+
+    @pytest.mark.parametrize("missed", ["count_children", "count_incidents_in_category"])
+    def test_the_database_restriction_is_a_conflict_too(
+        self,
+        facilities_client: TestClient,
+        actors: Actors,
+        world: World,
+        make_incident: Any,
+        verify_session: Session,
+        monkeypatch: pytest.MonkeyPatch,
+        missed: str,
+    ) -> None:
+        """Miss a pre-check on purpose: both RESTRICT foreign keys must still surface as 409.
+
+        The children case is the one passive_deletes exists for; without it
+        the ORM would null the child's parent first and the delete would go
+        through, silently promoting the child to a root.
+        """
+        from facilities_service import repository
+
+        parent_id, child_id = world.facilities.id, world.hvac.id
+        incident_id = make_incident(category_id=parent_id).id
+        monkeypatch.setattr(repository, missed, lambda s, c: 0)
+        if missed == "count_children":
+            monkeypatch.setattr(repository, "count_incidents_in_category", lambda s, c: 0)
+        else:
+            monkeypatch.setattr(repository, "count_children", lambda s, c: 0)
+        resp = facilities_client.delete(f"{P}/categories/{parent_id}", headers=actors.admin)
+        assert (resp.status_code, resp.json()["error"]) == (409, "conflict")
+        assert stored(verify_session, Category, parent_id) is not None
+        assert stored(verify_session, Category, child_id).parent_id == parent_id
+        assert stored(verify_session, Incident, incident_id).category_id == parent_id
+
+    def test_a_non_admin_is_refused_before_the_lookup(
+        self, facilities_client: TestClient, actors: Actors
+    ) -> None:
+        resp = facilities_client.delete(f"{P}/categories/{uuid.uuid4()}", headers=actors.employee)
+        assert resp.status_code == 403
+
+    def test_an_unknown_category_is_not_found(
+        self, facilities_client: TestClient, actors: Actors
+    ) -> None:
+        resp = facilities_client.delete(f"{P}/categories/{uuid.uuid4()}", headers=actors.admin)
         assert resp.status_code == 404

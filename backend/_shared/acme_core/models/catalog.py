@@ -30,7 +30,10 @@ class Category(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     parent: Mapped[Optional["Category"]] = relationship(
         back_populates="children", remote_side="Category.id"
     )
-    children: Mapped[list["Category"]] = relationship(back_populates="parent")
+    # passive_deletes: without it, deleting a parent makes the ORM null the
+    # children's parent_id first, so the RESTRICT foreign key never fires and
+    # sub-categories silently become roots. With it, the database refuses.
+    children: Mapped[list["Category"]] = relationship(back_populates="parent", passive_deletes=True)
 
     __table_args__ = (
         # Sibling names must differ; the same leaf name under two parents is fine.
