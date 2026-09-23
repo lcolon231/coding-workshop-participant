@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
+import { usePageTitle } from '../lib/usePageTitle'
 import { useSearchParams } from 'react-router-dom'
 import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
@@ -103,6 +104,7 @@ function Frame({ height = 120 }) {
  * own, so a failure in one leaves the others standing with their own retry.
  */
 export default function ReportsPage() {
+  usePageTitle('Reports')
   const [searchParams, setSearchParams] = useSearchParams()
   const fallback = useMemo(() => defaultRange(), [])
   const from = searchParams.get('from') ?? fallback.from

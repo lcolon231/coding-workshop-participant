@@ -6,6 +6,8 @@ import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
 import { ShieldCheck, User, Wrench } from '@phosphor-icons/react'
 import { PriorityChip, StatusChip } from '../components/IncidentChips'
+import SkipLink from '../components/SkipLink'
+import { usePageTitle } from '../lib/usePageTitle'
 
 // TODO: replace with real ACME facility photography, landscape, about 1600x1000.
 // The same placeholder seed as the sign-in panel, so the two screens match.
@@ -218,8 +220,10 @@ function Bullet({ children }) {
  * constants the reports are measured against.
  */
 export default function LandingPage() {
+  usePageTitle()
   return (
-    <Box component="main" sx={{ minHeight: '100dvh', bgcolor: 'background.default', color: 'text.primary' }}>
+    <Box sx={{ minHeight: '100dvh', bgcolor: 'background.default', color: 'text.primary' }}>
+      <SkipLink />
       <Box component="header" sx={{ bgcolor: 'background.paper', borderBottom: 1, borderColor: 'divider' }}>
         <Container
           maxWidth="lg"
@@ -252,6 +256,7 @@ export default function LandingPage() {
         </Container>
       </Box>
 
+      <Box component="main" id="main" tabIndex={-1} sx={{ outline: 'none' }}>
       <Container maxWidth="lg" sx={{ py: { xs: 5, md: 12 } }}>
         <Box
           sx={{
@@ -436,6 +441,8 @@ export default function LandingPage() {
             <Actions inverted full />
           </Box>
         </Container>
+      </Box>
+
       </Box>
 
       <Container

@@ -17,6 +17,7 @@ import { useAuth } from '../auth/AuthContext'
 import { initials } from '../lib/format'
 import { isStaff } from '../lib/incidents'
 import NotificationBell from './NotificationBell'
+import SkipLink from './SkipLink'
 import ThemeToggle from './ThemeToggle'
 
 const ADMIN = ['Facility Admin']
@@ -114,6 +115,7 @@ export default function AppShell() {
         backgroundRepeat: 'no-repeat',
       }}
     >
+      <SkipLink />
       <AppBar
         position="sticky"
         elevation={0}
@@ -241,7 +243,13 @@ export default function AppShell() {
         </Toolbar>
       </AppBar>
 
-      <Container component="main" maxWidth="lg" sx={{ flex: 1, py: { xs: 3, md: 5 } }}>
+      <Container
+        component="main"
+        id="main"
+        tabIndex={-1}
+        maxWidth="lg"
+        sx={{ flex: 1, py: { xs: 3, md: 5 }, outline: 'none' }}
+      >
         <Outlet />
       </Container>
     </Box>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { usePageTitle } from '../lib/usePageTitle'
 import { Link as RouterLink, useLocation, useParams } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -172,6 +173,7 @@ export default function IncidentPage() {
 
   // Names for the ids the incident carries. Optional: the page reads without them.
   const incident = data?.incident
+  usePageTitle(incident?.title ?? 'Incident')
   const buildingId = incident?.building_id
   const floorId = incident?.floor_id
   const seatId = incident?.seat_id

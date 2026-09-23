@@ -1,5 +1,6 @@
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
+import { usePageTitle } from '../lib/usePageTitle'
 import ThemeToggle from './ThemeToggle'
 
 // TODO: replace with real ACME facility photography, portrait, about 1200x1600.
@@ -18,9 +19,12 @@ function Wordmark({ sx }) {
  * The photo panel is decorative and hidden from assistive technology.
  */
 export default function AuthLayout({ title, subtitle, children, footer }) {
+  usePageTitle(title)
   return (
     <Box
       component="main"
+      id="main"
+      tabIndex={-1}
       sx={{
         minHeight: '100dvh',
         display: 'grid',

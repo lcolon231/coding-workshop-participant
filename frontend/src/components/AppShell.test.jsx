@@ -31,4 +31,13 @@ describe('AppShell', () => {
     renderSignedIn(<AppShell />, { path: '/', user: EMPLOYEE })
     expect(screen.queryByRole('button', { name: /Notifications/ })).not.toBeInTheDocument()
   })
+
+  it('starts with a skip link that targets the main landmark', () => {
+    renderSignedIn(<AppShell />, { path: '/', user: EMPLOYEE })
+    const skip = screen.getByRole('link', { name: 'Skip to content' })
+    expect(skip).toHaveAttribute('href', '#main')
+    expect(skip.compareDocumentPosition(screen.getByRole('navigation', { name: 'Primary' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(screen.getByRole('main')).toHaveAttribute('id', 'main')
+    expect(screen.getByRole('main')).toHaveAttribute('tabindex', '-1')
+  })
 })
