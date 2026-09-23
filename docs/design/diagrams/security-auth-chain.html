@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Per-request authentication and authorization chain</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&family=Noto+Serif:ital@0;1&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper:   #f5f5f5;
+      --color-ink:     #2d3142;
+      --color-muted:   #4f5d75;
+      --color-accent:  #eb6c36;
+      --font-sans:     'Geist', system-ui, sans-serif;
+      --font-serif:    'Instrument Serif', 'Noto Serif', serif;
+      --font-mono:     'Geist Mono', ui-monospace, monospace;
+    }
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-paper);
+      color: var(--color-ink);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 2rem;
+    }
+    .frame { max-width: 1280px; width: 100%; }
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--color-muted);
+      margin-bottom: 0.5rem;
+    }
+    h1 {
+      font-family: var(--font-serif);
+      font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem);
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      color: var(--color-ink);
+      margin-bottom: 0.5rem;
+    }
+    .subtitle {
+      font-family: var(--font-sans);
+      font-size: 0.875rem;
+      color: var(--color-muted);
+      max-width: 72ch;
+      line-height: 1.5;
+      margin-bottom: 1.5rem;
+    }
+    svg { width: 100%; min-width: 900px; display: block; }
+    .colophon {
+      margin-top: 1.25rem;
+      padding-top: 0.75rem;
+      border-top: 1px solid rgba(45,49,66,0.12);
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      letter-spacing: 0.06em;
+      color: var(--color-muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Security model · per-request authentication chain · ACME Facility Incident Management</p>
+    <h1>Per-request authentication and authorization chain</h1>
+    <p class="subtitle">Every 401 fires before any row is read; 403 only when the row is already visible; anything out of scope is a 404. Credential handling on the right is what the chain relies on. Companion to security-boundaries.html.</p>
+    <svg viewBox="0 0 1280 1120" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="security-auth-chain-title security-auth-chain-desc">
+      <title id="security-auth-chain-title">Per-request authentication and authorization chain</title>
+      <desc id="security-auth-chain-desc">Flowchart showing how every authenticated request is decoded, matched to a live user row, checked for revocation and role, then scoped to the rows the principal may see, with 401, 403 and 404 exits and the credential controls beside it.</desc>
+      <defs>
+        <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
+        <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/></marker>
+        <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/></marker>
+      </defs>
+
+      <rect width="100%" height="100%" fill="#f5f5f5"/>
+        <rect x="40" y="40" width="880" height="1000" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+        <rect x="52" y="44" width="464" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="284" y="53" fill="rgba(45,49,66,0.40)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">PER-REQUEST AUTHENTICATION CHAIN · DEPENDENCIES.CURRENT_USER · RUNS BEFORE EVERY ROW LOOKUP</text>
+        <rect x="940" y="120" width="300" height="788" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+        <rect x="952" y="124" width="128" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="1016" y="133" fill="rgba(45,49,66,0.40)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">CREDENTIALS AND SECRETS</text>
+        <path d="M 420,128 L 420,152" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <path d="M 420,200 L 420,220" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <path d="M 420,316 L 420,348" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <path d="M 420,444 L 420,476" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <path d="M 420,572 L 420,604" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <path d="M 420,700 L 420,732" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <path d="M 420,828 L 420,852" fill="none" stroke="#eb6c36" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+        <path d="M 420,908 L 420,944" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <path d="M 550,268 L 680,268" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <path d="M 550,396 L 680,396" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <path d="M 550,524 L 680,524" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <path d="M 550,652 L 680,652" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <path d="M 550,780 L 680,780" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <path d="M 540,972 L 680,972" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <path d="M 485,244 H 612 Q 620,244 620,236 V 208 Q 620,200 628,200 H 960" fill="none" stroke="#4f5d75" stroke-width="1.0" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+        <path d="M 1090,404 L 1090,460" fill="none" stroke="#4f5d75" stroke-width="1.0" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+        <rect x="428" y="328" width="24" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="440" y="337" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">OK</text>
+        <rect x="428" y="456" width="28" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="442" y="465" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">ROW</text>
+        <rect x="428" y="584" width="28" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="442" y="593" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">YES</text>
+        <rect x="428" y="712" width="28" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="442" y="721" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">YES</text>
+        <rect x="428" y="834" width="24" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="440" y="843" fill="#eb6c36" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">OK</text>
+        <rect x="584" y="250" width="52" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="610" y="259" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">INVALID</text>
+        <rect x="588" y="378" width="44" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="610" y="387" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">NO ROW</text>
+        <rect x="598" y="506" width="24" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="610" y="515" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">NO</text>
+        <rect x="598" y="634" width="24" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="610" y="643" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">NO</text>
+        <rect x="576" y="762" width="68" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="610" y="771" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">WRONG ROLE</text>
+        <rect x="572" y="954" width="76" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="610" y="963" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">FILTERED OUT</text>
+        <rect x="748" y="182" width="84" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="790" y="191" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">VERIFIES WITH</text>
+        <rect x="1098" y="419" width="84" height="26" rx="2" fill="#f5f5f5"/>
+        <text x="1104" y="429" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="start">ACCESS 30 MIN</text>
+        <text x="1104" y="440" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="start">+ REFRESH 7 D</text>
+        <rect x="300" y="72" width="240" height="56" rx="28.0" fill="#f5f5f5"/>
+        <rect x="300" y="72" width="240" height="56" rx="28.0" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+        <text x="420" y="98" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Authenticated route</text>
+        <text x="420" y="112" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">any handler with a principal</text>
+        <rect x="300" y="152" width="240" height="48" rx="6" fill="#f5f5f5"/>
+        <rect x="300" y="152" width="240" height="48" rx="6" fill="rgba(79,93,117,0.10)" stroke="#7a8399" stroke-width="1"/>
+        <rect x="308" y="158" width="36" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+        <text x="326" y="167" fill="#7a8399" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">INPUT</text>
+        <text x="420" y="182" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Authorization: Bearer header</text>
+        <polygon points="420,220.0 550.0,268 420,316.0 290.0,268" fill="#f5f5f5"/>
+        <polygon points="420,220.0 550.0,268 420,316.0 290.0,268" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <text x="420" y="266" fill="#2d3142" font-size="11" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">decode_token</text>
+        <text x="420" y="280" fill="#2d3142" font-size="11" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">valid access token?</text>
+        <polygon points="420,348.0 550.0,396 420,444.0 290.0,396" fill="#f5f5f5"/>
+        <polygon points="420,348.0 550.0,396 420,444.0 290.0,396" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <text x="420" y="394" fill="#2d3142" font-size="11" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">load users row by sub</text>
+        <text x="420" y="408" fill="#2d3142" font-size="11" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">row exists?</text>
+        <polygon points="420,476.0 550.0,524 420,572.0 290.0,524" fill="#f5f5f5"/>
+        <polygon points="420,476.0 550.0,524 420,572.0 290.0,524" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <text x="420" y="528" fill="#2d3142" font-size="11" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">is_active?</text>
+        <polygon points="420,604.0 550.0,652 420,700.0 290.0,652" fill="#f5f5f5"/>
+        <polygon points="420,604.0 550.0,652 420,700.0 290.0,652" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <text x="420" y="656" fill="#2d3142" font-size="11" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">iat ≥ sessions_valid_from?</text>
+        <polygon points="420,732.0 550.0,780 420,828.0 290.0,780" fill="#f5f5f5"/>
+        <polygon points="420,732.0 550.0,780 420,828.0 290.0,780" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <text x="420" y="778" fill="#2d3142" font-size="11" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">role gate</text>
+        <text x="420" y="792" fill="#2d3142" font-size="11" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">require_admin / require_staff</text>
+        <rect x="300" y="852" width="240" height="56" rx="6" fill="#f5f5f5"/>
+        <rect x="300" y="852" width="240" height="56" rx="6" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/>
+        <rect x="308" y="858" width="36" height="12" rx="2" fill="transparent" stroke="rgba(235,108,54,0.50)" stroke-width="0.8"/>
+        <text x="326" y="867" fill="#eb6c36" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">SCOPE</text>
+        <text x="420" y="884" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">scope_incidents(select, principal)</text>
+        <text x="420" y="898" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">row-level filter · S6</text>
+        <rect x="300" y="944" width="240" height="56" rx="6" fill="#f5f5f5"/>
+        <rect x="300" y="944" width="240" height="56" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="308" y="950" width="36" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+        <text x="326" y="959" fill="#2d3142" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">QUERY</text>
+        <text x="420" y="976" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">scoped SELECT … FOR UPDATE</text>
+        <text x="420" y="990" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">one_or_none() → NotFound</text>
+        <text x="272" y="252" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">alg pinned HS256 (S9)</text>
+        <text x="272" y="264" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">require sub typ jti iat exp iss aud</text>
+        <text x="272" y="276" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">typ must be access</text>
+        <text x="272" y="386" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">role and is_active come from the DB,</text>
+        <text x="272" y="398" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">not from the claim (S7)</text>
+        <text x="272" y="520" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">soft-deleted users fail here</text>
+        <text x="272" y="642" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">bumped by logout-all, password</text>
+        <text x="272" y="654" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">or role change</text>
+        <text x="272" y="776" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">runs before any row lookup</text>
+        <text x="272" y="862" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">Admin: all</text>
+        <text x="272" y="874" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">Engineer: assignee_id OR reporter_id</text>
+        <text x="272" y="886" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">Employee: reporter_id</text>
+        <text x="272" y="898" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">notes: employees see public only</text>
+        <text x="272" y="966" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">never session.get() on a child (S6)</text>
+        <rect x="680" y="240" width="220" height="440" rx="6" fill="#f5f5f5"/>
+        <rect x="680" y="240" width="220" height="440" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3"/>
+        <rect x="688" y="246" width="40" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+        <text x="708" y="255" fill="#4f5d75" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">REJECT</text>
+        <text x="790" y="445" fill="#2d3142" font-size="14" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">401</text>
+        <text x="790" y="459" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">unauthenticated /</text>
+        <text x="790" y="472" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">token_expired /</text>
+        <text x="790" y="485" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">wrong_token_type</text>
+        <text x="790" y="498" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">+ WWW-Authenticate</text>
+        <rect x="680" y="752" width="220" height="56" rx="6" fill="#f5f5f5"/>
+        <rect x="680" y="752" width="220" height="56" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3"/>
+        <rect x="688" y="758" width="40" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+        <text x="708" y="767" fill="#4f5d75" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">REJECT</text>
+        <text x="790" y="784" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">403 forbidden</text>
+        <text x="790" y="798" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">only when the row is already visible</text>
+        <rect x="680" y="944" width="220" height="56" rx="6" fill="#f5f5f5"/>
+        <rect x="680" y="944" width="220" height="56" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3"/>
+        <rect x="688" y="950" width="40" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+        <text x="708" y="959" fill="#4f5d75" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">REJECT</text>
+        <text x="790" y="976" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">404 not_found</text>
+        <text x="790" y="990" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">out of scope == nonexistent (S6)</text>
+        <rect x="960" y="160" width="260" height="88" rx="6" fill="#f5f5f5"/>
+        <rect x="960" y="160" width="260" height="88" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+        <rect x="968" y="166" width="20" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+        <text x="978" y="175" fill="#4f5d75" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">S1</text>
+        <text x="1090" y="194" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">JWT secret</text>
+        <text x="1090" y="208" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">app_secrets table · token_bytes(32)</text>
+        <text x="1090" y="222" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">INSERT ON CONFLICT DO NOTHING · cached</text>
+        <text x="1090" y="234" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">shared by all services · no env var, no TF</text>
+        <rect x="960" y="300" width="260" height="104" rx="6" fill="#f5f5f5"/>
+        <rect x="960" y="300" width="260" height="104" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="968" y="306" width="20" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+        <text x="978" y="315" fill="#2d3142" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">S8</text>
+        <text x="1090" y="336" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">login</text>
+        <text x="1090" y="350" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">bcrypt always runs (dummy hash if no user)</text>
+        <text x="1090" y="363" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">one message: wrong password/locked/inactive</text>
+        <text x="1090" y="376" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">lockout 15 min after 5 failures</text>
+        <text x="1090" y="389" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">never IP based</text>
+        <rect x="960" y="460" width="260" height="88" rx="6" fill="#f5f5f5"/>
+        <rect x="960" y="460" width="260" height="88" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="968" y="466" width="40" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+        <text x="988" y="475" fill="#2d3142" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">TOKENS</text>
+        <text x="1090" y="494" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">refresh rotation</text>
+        <text x="1090" y="508" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">token hash stored, raw never persisted</text>
+        <text x="1090" y="522" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">each pair in a family_id</text>
+        <text x="1090" y="534" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">reuse of a rotated token revokes the family</text>
+        <rect x="960" y="604" width="260" height="104" rx="6" fill="#f5f5f5"/>
+        <rect x="960" y="604" width="260" height="104" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="968" y="610" width="52" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+        <text x="994" y="619" fill="#2d3142" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">S5 · S10</text>
+        <text x="1090" y="640" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">register</text>
+        <text x="1090" y="654" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">@acme.inc only · min 12 chars · 72 bytes (S10)</text>
+        <text x="1090" y="667" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">202 identical whether or not email exists</text>
+        <text x="1090" y="680" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">role always Employee</text>
+        <text x="1090" y="693" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">body is extra=forbid (S5)</text>
+        <rect x="960" y="764" width="260" height="104" rx="6" fill="#f5f5f5"/>
+        <rect x="960" y="764" width="260" height="104" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="968" y="770" width="20" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+        <text x="978" y="779" fill="#2d3142" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">S3</text>
+        <text x="1090" y="806" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">error envelope</text>
+        <text x="1090" y="820" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">details[] from an allowlist {field, message}</text>
+        <text x="1090" y="834" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">passwords and tokens never echoed or logged</text>
+        <text x="1090" y="846" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">500 message scrubbed, request_id kept</text>
+        <line x1="40" y1="1056" x2="1240" y2="1056" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+        <text x="40" y="1072" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.18em">LEGEND</text>
+        <rect x="40" y="1088" width="24" height="12" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+        <text x="72" y="1097" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Entry</text>
+        <polygon points="133.5,1087 145.5,1093 133.5,1099 121.5,1093" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <text x="153.5" y="1097" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Check (fail exits right)</text>
+        <rect x="299.9" y="1088" width="14" height="10" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <text x="319.9" y="1097" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Step</text>
+        <rect x="364.29999999999995" y="1088" width="14" height="10" rx="2" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/>
+        <text x="384.29999999999995" y="1097" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Row-level scoping (focal)</text>
+        <rect x="535.8" y="1088" width="14" height="10" rx="2" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3"/>
+        <text x="555.8" y="1097" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Rejection</text>
+        <rect x="625.6999999999999" y="1088" width="14" height="10" rx="2" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+        <text x="645.6999999999999" y="1097" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Secret store</text>
+<path d="M 730.9,1093 L 758.9,1093" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <text x="766.9" y="1097" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Pass</text>
+<path d="M 811.3,1093 L 839.3,1093" fill="none" stroke="#4f5d75" stroke-width="1.0" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+        <text x="847.3" y="1097" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Uses (passive)</text>
+
+    </svg>
+    <p class="colophon">Redrawn from docs/design/diagrams with the diagram-design skill · default editorial skin · Security model</p>
+  </div>
+</body>
+</html>
