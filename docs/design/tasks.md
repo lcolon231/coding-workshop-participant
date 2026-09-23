@@ -18,9 +18,9 @@ are placed in the phase where they belong.
 | 3 | `incidents` service | 15 / 16 |
 | 4 | `facilities` service | 9 / 10 |
 | 5 | Frontend | 10 / 24 |
-| 6 | Cloud, CI and operations | 2 / 12 |
+| 6 | Cloud, CI and operations | 3 / 12 |
 | 7 | Documentation and handover | 0 / 7 |
-| | **Total** | **67 / 120** |
+| | **Total** | **68 / 120** |
 
 ---
 
@@ -158,8 +158,9 @@ Currently one line of work is allocated. **Roughly 2.5 of the rubric's 5 compete
 - [ ] **T106** Deploy the frontend via `bin/deploy-frontend.sh aws`; verify the CloudFront URL end to end.
 - [x] **T107** CI test job — pytest + coverage with a PostgreSQL service container, `htmlcov` uploaded as an artifact. *(`.github/workflows/python.tests.yml`: Python 3.13, `postgres:17` service, `make lint` + `make cov` verbatim, `backend-coverage` artifact kept 14 days even on a red run)*
 - [x] **T108** CI frontend job — lint plus Vitest. *(`.github/workflows/react.tests.yml`: Node 24, `npm ci` cached on the lockfile, lint → test → `test:coverage`, `frontend-coverage` artifact kept 14 days; no threshold yet, 84.77% statements measured for T96)*
-- [ ] **T109** Raise the coverage ratchet to its final value once all services exist.
+- [x] **T109** Raise the coverage ratchet to its final value once all services exist. *(98 → 99; measured 99.8% with all three services)*
 - [ ] **T110** Re-verify `./bin/cleanup-environment.sh` still works against everything deployed.
+- [ ] **T122** Load test on deploy day, **if time allows**: one Artillery run against the deployed login and incident-list endpoints at modest concurrency; record p95, error rate and any connection errors in NOTES.md next to the cold-start and memory numbers. Expected finding: `pool_size=1` per Lambda with no `reserved_concurrent_executions` (plan known-gaps table) — state the limit rather than fix it. *(rubric "Performance Testing"; not a coverage item)*
 
 ## Phase 7 — Documentation and handover
 
