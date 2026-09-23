@@ -68,6 +68,20 @@ stated. Numbers are what the log said, not what the design hoped.
 | First request after Aurora paused | 45–60 s, longer than CloudFront's 30 s origin timeout | none: `min_capacity` 0.5 keeps it awake | PR #23, demo day only |
 | Readiness probe | – | 0.1 s warm | – |
 
+**Load test** (Artillery 2, one minute at 5 new users/s, four incident-list reads per login, through
+CloudFront from the VDI)
+
+| Endpoint | Requests | Median | p95 | p99 | Max | Errors |
+|---|---|---|---|---|---|---|
+| `GET /api/incidents` (warm token) | 241 | 32 ms | 50 ms | 56 ms | 63 ms | 0 |
+| `POST /api/auth/login` (bcrypt cost 12) | 59 | 1.06 s | 4.07 s | 5.71 s | 6.03 s | 0 |
+
+Every response was a 200. The list was served warm throughout (143 MB used). The login tail is
+Lambda scaling: the burst spawned four auth environments, each paying 2.4–3.0 s of init, bcrypt, and
+its first TLS connection to Aurora. No connection errors at this rate, so the `pool_size=1` /
+no-reserved-concurrency limit in the known-gaps table was not reached; it is bounded below, not
+measured.
+
 **Package**: 852 `.py` files and 5 `.pyc` in the deployed zip. The packager installs with pip's
 `--no-compile`, which is why the compile had to move into the init phase rather than be avoided.
 
@@ -83,10 +97,10 @@ stated. Numbers are what the log said, not what the design hoped.
 | A page that fires several requests at once can hit several cold environments | Lambda scales by spawning environments; the Reports page fires three requests | Same as above |
 | Aurora floor of 0.5 costs about six cents an hour | Set so the demo never waits on a resume | Put `min_capacity` back to 0.0 in `infra/rds.tf` after the demo |
 | Burst connection exhaustion | `pool_size=1` per environment and no `reserved_concurrent_executions`; a burst can open more connections than a 0.5-unit cluster likes | A reserved-concurrency cap, or RDS Proxy |
-| CloudFront rewrites an S3 404 to `200 index.html` for every origin | Distribution-level `custom_error_response`; the client's content-type guard turns an API 404 that came back as HTML into a clear error | A separate distribution or behaviour-level error handling |
+| CloudFront rewrites a 404 from any origin to `200 index.html`, and caches that page for 300 s shared by every 404 path | Distribution-level `custom_error_response` with `error_caching_min_ttl = 300`; the client's content-type guard turns an API 404 that came back as HTML into a clear error | A separate distribution or behaviour-level error handling |
 | Session credentials expire | `ENVIRONMENT.config` holds STS tokens | Re-run `./bin/setup-participant.sh` |
 | `bin/start-dev.sh` is unused | It hard-exits without LocalStack | `make serve` replaces it (README) |
-| Load test not run | Time went to the deploy-day findings above instead (T122 was "if time allows") | One Artillery run against login and the incident list |
+| Load test only at modest concurrency | One minute at 5 new users/s produced no connection errors, so the burst limit above is bounded below, not measured | A longer Artillery run at a rising arrival rate until the first connection error |
 
 ## Security notes
 
