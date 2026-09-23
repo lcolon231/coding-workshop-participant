@@ -39,8 +39,14 @@ These four are omitted from the per-service tables below.
 
 ### 1.2 Authentication
 
-- Every endpoint except `register`, `login`, `refresh`, `logout` and the four above requires
-  `Authorization: Bearer <access_token>`.
+- Every endpoint except `register`, `login`, `refresh`, `logout` and the four above requires a
+  bearer access token, in `X-Acme-Authorization: Bearer <access_token>` or in the standard
+  `Authorization` header. The browser client sends the former: on AWS, CloudFront's origin access
+  control signs every request to the Lambda function URLs and **overwrites the viewer's
+  `Authorization` header** with its own SigV4 signature, so a token sent there never reaches the
+  API (found on the first deploy, T123). The standard header still works locally, from curl and
+  from the Swagger page. When both are present the ACME header wins, since behind CloudFront the
+  other one is the edge's signature.
 - Access tokens live **30 min**, refresh tokens **7 days** (`config.py:37-38`).
 - On every authenticated request `current_user` loads the user row and takes `role` and `is_active`
   **from the database, not the token** (S7). A token issued before `users.sessions_valid_from` is

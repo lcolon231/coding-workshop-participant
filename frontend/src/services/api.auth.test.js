@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ApiError, authedRequest } from './api'
+import { ApiError, AUTH_HEADER, authedRequest } from './api'
 import { readSession } from './session'
 import { calls, jsonResponse, signIn, stubApi } from '../test/helpers'
 
@@ -10,11 +10,13 @@ afterEach(() => {
 })
 
 describe('authedRequest', () => {
-  it('attaches the bearer token', async () => {
+  it('attaches the bearer token in the header CloudFront leaves alone', async () => {
     signIn()
     const fetch = stubApi([['GET', '/api/x', () => jsonResponse(200, { ok: true })]])
     await expect(authedRequest('/api/x')).resolves.toEqual({ ok: true })
-    expect(fetch.mock.calls[0][1].headers.Authorization).toBe('Bearer access-1')
+    const { headers } = fetch.mock.calls[0][1]
+    expect(headers[AUTH_HEADER]).toBe('Bearer access-1')
+    expect(headers.Authorization).toBeUndefined()
   })
 
   it('refuses without a session, without calling the API', async () => {
@@ -32,7 +34,7 @@ describe('authedRequest', () => {
         'GET',
         '/api/x',
         ({ init }) =>
-          init.headers.Authorization === 'Bearer access-2'
+          init.headers[AUTH_HEADER] === 'Bearer access-2'
             ? jsonResponse(200, { ok: true })
             : jsonResponse(401, { error: 'token_expired', message: 'Expired.' }),
       ],
@@ -53,7 +55,7 @@ describe('authedRequest', () => {
         'GET',
         /^\/api\/(x|y)$/,
         ({ init }) =>
-          init.headers.Authorization === 'Bearer access-2'
+          init.headers[AUTH_HEADER] === 'Bearer access-2'
             ? jsonResponse(200, { ok: true })
             : jsonResponse(401, { error: 'token_expired', message: 'Expired.' }),
       ],
