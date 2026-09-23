@@ -50,7 +50,7 @@ export default function CategoriesPanel({ retired, notify }) {
       notify(`${record.name} ${record.is_active ? 'retired' : 'restored'}.`)
       reload()
     } catch (err) {
-      notify(err.message)
+      notify({ message: err.message, severity: 'error' })
     }
   }
 

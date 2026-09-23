@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import FormControlLabel from '@mui/material/FormControlLabel'
-import Snackbar from '@mui/material/Snackbar'
 import Stack from '@mui/material/Stack'
 import Switch from '@mui/material/Switch'
 import Tab from '@mui/material/Tab'
@@ -11,6 +10,7 @@ import Typography from '@mui/material/Typography'
 import BuildingsPanel from '../components/facilities/BuildingsPanel'
 import CategoriesPanel from '../components/facilities/CategoriesPanel'
 import EngineersPanel from '../components/facilities/EngineersPanel'
+import Notice from '../components/Notice'
 
 const TABS = [
   { value: 'buildings', label: 'Buildings' },
@@ -72,13 +72,7 @@ export default function FacilitiesPage() {
       {tab === 'categories' && <CategoriesPanel retired={retired} notify={setNotice} />}
       {tab === 'engineers' && <EngineersPanel notify={setNotice} />}
 
-      <Snackbar
-        open={notice !== null}
-        autoHideDuration={4000}
-        onClose={() => setNotice(null)}
-        message={notice}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      />
+      <Notice notice={notice} onClose={() => setNotice(null)} />
     </Stack>
   )
 }

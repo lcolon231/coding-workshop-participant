@@ -8,7 +8,6 @@ import OutlinedInput from '@mui/material/OutlinedInput'
 import Pagination from '@mui/material/Pagination'
 import Select from '@mui/material/Select'
 import Skeleton from '@mui/material/Skeleton'
-import Snackbar from '@mui/material/Snackbar'
 import Stack from '@mui/material/Stack'
 import Table from '@mui/material/Table'
 import TableBody from '@mui/material/TableBody'
@@ -23,6 +22,7 @@ import { useAuth } from '../auth/AuthContext'
 import UserDialog from '../components/admin/UserDialog'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { EmptyState, LoadError } from '../components/PageState'
+import Notice from '../components/Notice'
 import { formatDate } from '../lib/format'
 import { PAGE_SIZE } from '../lib/incidents'
 import { ROLES, USER_SORT_OPTIONS } from '../lib/users'
@@ -301,7 +301,7 @@ export default function UsersPage() {
         await updateUser(user.id, { is_active: true })
         afterMutation(`${user.full_name} reactivated.`)
       } catch (err) {
-        setNotice(err.message)
+        setNotice({ message: err.message, severity: 'error' })
       }
     },
   }
@@ -453,13 +453,7 @@ export default function UsersPage() {
           afterMutation(`${dialog.user.full_name} deactivated.`)
         }}
       />
-      <Snackbar
-        open={notice !== null}
-        autoHideDuration={4000}
-        onClose={() => setNotice(null)}
-        message={notice}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      />
+      <Notice notice={notice} onClose={() => setNotice(null)} />
     </Stack>
   )
 }

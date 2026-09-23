@@ -4,7 +4,6 @@ import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Link from '@mui/material/Link'
 import Skeleton from '@mui/material/Skeleton'
-import Snackbar from '@mui/material/Snackbar'
 import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
 import useMediaQuery from '@mui/material/useMediaQuery'
@@ -12,6 +11,7 @@ import { ArrowLeft, MagnifyingGlass } from '@phosphor-icons/react'
 import { useAuth } from '../auth/AuthContext'
 import { PriorityChip, StatusChip } from '../components/IncidentChips'
 import { EmptyState, LoadError } from '../components/PageState'
+import Notice from '../components/Notice'
 import EscalationPanel from '../components/incident/EscalationPanel'
 import HistoryList from '../components/incident/HistoryList'
 import NotesSection from '../components/incident/NotesSection'
@@ -408,13 +408,7 @@ export default function IncidentPage() {
         }}
       />
 
-      <Snackbar
-        open={notice !== null}
-        autoHideDuration={4000}
-        onClose={() => setNotice(null)}
-        message={notice}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      />
+      <Notice notice={notice} onClose={() => setNotice(null)} />
     </Stack>
   )
 }
