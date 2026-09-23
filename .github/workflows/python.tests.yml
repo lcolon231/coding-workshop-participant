@@ -1,0 +1,89 @@
+name: Tests - Python
+
+on: [pull_request, push]
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    # Aurora runs PostgreSQL 17.7 (infra/rds.tf); the integration and e2e tiers
+    # create their own throwaway databases (acme_test_<pid>, acme_e2e_<pid>),
+    # so the container's superuser is all they need. POSTGRES_NAME and
+    # ACME_PG_NAME are deliberately NOT set.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          # Throwaway credential for a container that lives as long as this job.
+          POSTGRES_PASSWORD: ci-throwaway
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    env:
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: postgres
+      POSTGRES_PASS: ci-throwaway
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          # The Lambda runtime pinned in infra/locals.tf.
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: |
+            requirements-dev.txt
+            backend/auth/requirements.txt
+            backend/incidents/requirements.txt
+
+      # A real .venv so `make lint` and `make cov` run verbatim, with the same
+      # PYTHONPATH the Makefile exports locally. `make venv` is not used because
+      # it installs one service's requirements (SERVICE=auth); the suite imports
+      # both services.
+      - name: Install dependencies
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install --quiet --upgrade pip
+          .venv/bin/pip install --quiet \
+            -r requirements-dev.txt \
+            -r backend/auth/requirements.txt \
+            -r backend/incidents/requirements.txt
+
+      # The vendored copies (backend/<service>/acme_core) are committed. Fail
+      # fast if anything resolves acme_core from one of them instead of the
+      # source of truth, or the suite could pass against a stale artifact.
+      - name: Verify acme_core resolves from backend/_shared
+        run: |
+          PYTHONPATH=backend/_shared:backend/auth .venv/bin/python - <<'PY'
+          import acme_core, pathlib
+          resolved = pathlib.Path(acme_core.__file__).resolve()
+          expected = pathlib.Path("backend/_shared/acme_core/__init__.py").resolve()
+          assert resolved == expected, f"acme_core resolved from {resolved}"
+          print(f"acme_core -> {resolved}")
+          PY
+
+      - name: Lint (ruff + bandit)
+        run: make lint
+
+      - name: Test with coverage
+        run: make cov
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: htmlcov/
+          retention-days: 14

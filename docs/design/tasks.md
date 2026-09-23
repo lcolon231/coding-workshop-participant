@@ -18,9 +18,9 @@ are placed in the phase where they belong.
 | 3 | `incidents` service | 15 / 16 |
 | 4 | `facilities` service | 0 / 10 |
 | 5 | Frontend | 10 / 24 |
-| 6 | Cloud, CI and operations | 0 / 12 |
+| 6 | Cloud, CI and operations | 1 / 12 |
 | 7 | Documentation and handover | 0 / 7 |
-| | **Total** | **56 / 120** |
+| | **Total** | **57 / 120** |
 
 ---
 
@@ -156,7 +156,7 @@ Currently one line of work is allocated. **Roughly 2.5 of the rubric's 5 compete
 - [ ] **T104** Test whether an absolute path in `requirements.txt` lets Terraform vendor `acme_core` — if it works it **deletes the rsync bug class** rather than detecting it.
 - [ ] **T105** `unzip -l` the built artifact; confirm nothing pip-installs into the service dir (justifies the simplified `.gitignore`).
 - [ ] **T106** Deploy the frontend via `bin/deploy-frontend.sh aws`; verify the CloudFront URL end to end.
-- [ ] **T107** CI test job — pytest + coverage with a PostgreSQL service container, `htmlcov` uploaded as an artifact. Today CI runs bandit and `npm audit` only.
+- [x] **T107** CI test job — pytest + coverage with a PostgreSQL service container, `htmlcov` uploaded as an artifact. *(`.github/workflows/python.tests.yml`: Python 3.13, `postgres:17` service, `make lint` + `make cov` verbatim, `backend-coverage` artifact kept 14 days even on a red run)*
 - [ ] **T108** CI frontend job — lint plus Vitest.
 - [ ] **T109** Raise the coverage ratchet to its final value once all services exist.
 - [ ] **T110** Re-verify `./bin/cleanup-environment.sh` still works against everything deployed.
