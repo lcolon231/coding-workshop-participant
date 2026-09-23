@@ -259,7 +259,7 @@ export default function BuildingsPanel({ retired, notify }) {
       toolbar={
         floor && (
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-            On {floorTitle(floor).toLowerCase()}
+            On {floorTitle(floor)}
             {building ? ` of ${building.name}` : ''}
           </Typography>
         )
@@ -312,7 +312,7 @@ export default function BuildingsPanel({ retired, notify }) {
             : dialog?.level === 'floor'
               ? `Add a floor to ${building?.name ?? 'this building'}`
               : dialog?.level === 'seat'
-                ? `Add a seat on ${floor ? floorTitle(floor).toLowerCase() : 'this floor'}`
+                ? `Add a seat on ${floor ? floorTitle(floor) : 'this floor'}`
                 : 'Add a building'
         }
         fields={spec?.fields ?? []}
