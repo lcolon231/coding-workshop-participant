@@ -1,0 +1,152 @@
+%% ACME Facility Incident Management -- domain data model
+%% The 12 tables in backend/_shared/acme_core/models (users, facility, catalog, incident)
+%% plus app_secrets. Cardinalities follow the foreign keys and their ondelete rules.
+%% Enum values are the display strings stored in the column, e.g. "In Progress".
+%% Companion: workflow.mmd draws the incident status machine driven from this model.
+
+erDiagram
+    USERS ||--o| ENGINEER_PROFILES : "has (1:1, cascade)"
+    USERS ||--o{ REFRESH_TOKENS : "owns (cascade)"
+    USERS ||--o{ INCIDENTS : "reports (restrict)"
+    USERS |o--o{ INCIDENTS : "assigned to (set null)"
+    USERS ||--o{ INCIDENT_NOTES : "authors (restrict)"
+    USERS ||--o{ INCIDENT_STATUS_HISTORY : "acts (restrict)"
+    USERS ||--o{ ESCALATION_REQUESTS : "requests (restrict)"
+    USERS |o--o{ ESCALATION_REQUESTS : "decides (set null)"
+
+    BUILDINGS ||--o{ FLOORS : "contains (cascade)"
+    FLOORS ||--o{ SEATS : "contains (cascade)"
+    CATEGORIES |o--o{ CATEGORIES : "parent of (restrict)"
+
+    BUILDINGS ||--o{ INCIDENTS : "located in (restrict)"
+    FLOORS |o--o{ INCIDENTS : "on floor (set null)"
+    SEATS |o--o{ INCIDENTS : "at seat (set null)"
+    CATEGORIES |o--o{ INCIDENTS : "classified as (restrict)"
+
+    INCIDENTS ||--o{ INCIDENT_NOTES : "has (cascade, append-only)"
+    INCIDENTS ||--o{ INCIDENT_STATUS_HISTORY : "has (cascade, append-only)"
+    INCIDENTS ||--o{ ESCALATION_REQUESTS : "has (cascade, one Pending at a time)"
+
+    USERS {
+        uuid id PK
+        string email UK "must be @acme.inc"
+        string full_name
+        string password_hash "bcrypt, 72-byte limit enforced"
+        enum role "Employee | Engineer | Facility Admin"
+        string occupation "nullable"
+        date date_of_birth "nullable"
+        bool is_active "soft delete"
+        timestamptz sessions_valid_from "bumped on logout-all, password or role change"
+        int failed_login_count
+        timestamptz locked_until "account lockout, never IP based"
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    ENGINEER_PROFILES {
+        uuid id PK
+        uuid user_id FK,UK
+        string specialty
+        int max_concurrent_incidents
+        bool is_available
+    }
+
+    REFRESH_TOKENS {
+        uuid id PK
+        uuid user_id FK
+        string token_hash UK "raw token is never stored"
+        uuid family_id "rotation family, revoked as a whole on reuse"
+        timestamptz issued_at
+        timestamptz expires_at "7 days"
+        timestamptz revoked_at "nullable"
+    }
+
+    APP_SECRETS {
+        string name PK "jwt_secret"
+        string value "secrets.token_bytes(32), created on first use"
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    BUILDINGS {
+        uuid id PK
+        string code UK
+        string name
+        string address "nullable"
+        bool is_active
+    }
+
+    FLOORS {
+        uuid id PK
+        uuid building_id FK
+        int level "unique per building"
+        string name "nullable"
+    }
+
+    SEATS {
+        uuid id PK
+        uuid floor_id FK
+        string code "unique per floor"
+        string label "nullable"
+        bool is_active
+    }
+
+    CATEGORIES {
+        uuid id PK
+        uuid parent_id FK "nullable, self reference"
+        string name "unique per parent"
+        string description "nullable"
+        bool is_active
+    }
+
+    INCIDENTS {
+        uuid id PK
+        string title
+        text description
+        enum status "Open | In Progress | Blocked | Resolved | Closed"
+        enum priority "Low | Medium | High | Critical"
+        uuid reporter_id FK "from the principal, never the body"
+        uuid assignee_id FK "nullable, must be an active Engineer"
+        uuid category_id FK "nullable"
+        uuid building_id FK "required"
+        uuid floor_id FK "nullable, must belong to building"
+        uuid seat_id FK "nullable, must belong to floor"
+        timestamptz acknowledged_at "stamp: first entry to In Progress"
+        timestamptz assigned_at "stamp: first entry to In Progress"
+        timestamptz resolved_at "stamp: latest entry to Resolved"
+        timestamptz closed_at "stamp: latest entry to Closed"
+        text resolution_note "nullable"
+        text blocked_reason "nullable, cleared on leaving Blocked"
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    INCIDENT_NOTES {
+        uuid id PK
+        uuid incident_id FK
+        uuid author_id FK
+        text body
+        enum visibility "public | internal; employees see public only"
+        timestamptz created_at
+    }
+
+    INCIDENT_STATUS_HISTORY {
+        uuid id PK
+        uuid incident_id FK
+        enum from_status "null for the creation row"
+        enum to_status
+        uuid actor_id FK
+        text note "resolution_note or blocked_reason at the time"
+        timestamptz created_at
+    }
+
+    ESCALATION_REQUESTS {
+        uuid id PK
+        uuid incident_id FK
+        uuid requested_by_id FK "reporter or assigned engineer"
+        text reason
+        enum status "Pending | Approved | Rejected"
+        uuid decided_by_id FK "nullable, admin"
+        timestamptz decided_at "nullable"
+        text decision_note "nullable"
+    }
