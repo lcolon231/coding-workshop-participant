@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trust boundaries, admin path and supply-chain controls</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&family=Noto+Serif:ital@0;1&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper:   #f5f5f5;
+      --color-ink:     #2d3142;
+      --color-muted:   #4f5d75;
+      --color-accent:  #eb6c36;
+      --font-sans:     'Geist', system-ui, sans-serif;
+      --font-serif:    'Instrument Serif', 'Noto Serif', serif;
+      --font-mono:     'Geist Mono', ui-monospace, monospace;
+    }
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-paper);
+      color: var(--color-ink);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 2rem;
+    }
+    .frame { max-width: 1280px; width: 100%; }
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--color-muted);
+      margin-bottom: 0.5rem;
+    }
+    h1 {
+      font-family: var(--font-serif);
+      font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem);
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      color: var(--color-ink);
+      margin-bottom: 0.5rem;
+    }
+    .subtitle {
+      font-family: var(--font-sans);
+      font-size: 0.875rem;
+      color: var(--color-muted);
+      max-width: 72ch;
+      line-height: 1.5;
+      margin-bottom: 1.5rem;
+    }
+    svg { width: 100%; min-width: 1000px; display: block; }
+    .colophon {
+      margin-top: 1.25rem;
+      padding-top: 0.75rem;
+      border-top: 1px solid rgba(45,49,66,0.12);
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      letter-spacing: 0.06em;
+      color: var(--color-muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Security model · trust boundaries and admin path · ACME Facility Incident Management</p>
+    <h1>Trust boundaries, admin path and supply-chain controls</h1>
+    <p class="subtitle">CloudFront is a router, not a boundary: the Function URL is publicly reachable, so every check lives in the process. Admin commands arrive by synchronous Lambda invoke and must match exactly or the invocation is refused. Controls S1–S12 refer to docs/design/plan.md; the per-request chain is drawn in security-auth-chain.html.</p>
+    <svg viewBox="0 0 1440 952" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="security-boundaries-title security-boundaries-desc">
+      <title id="security-boundaries-title">Trust boundaries, admin path and supply-chain controls</title>
+      <desc id="security-boundaries-desc">Security architecture diagram showing the browser reaching the Lambda runtime through CloudFront or directly through the public Function URL, all authorization enforced inside the runtime, the operator's admin invocation gated by a positive-match classifier, and the CI and dependency controls.</desc>
+      <defs>
+        <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
+        <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/></marker>
+        <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/></marker>
+      </defs>
+
+      <rect width="100%" height="100%" fill="#f5f5f5"/>
+        <rect x="40" y="80" width="280" height="520" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+        <rect x="52" y="84" width="88" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="96" y="93" fill="rgba(45,49,66,0.40)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">PUBLIC INTERNET</text>
+        <rect x="360" y="80" width="540" height="220" rx="8" fill="rgba(235,108,54,0.03)" stroke="rgba(235,108,54,0.45)" stroke-width="0.8"/>
+        <rect x="372" y="84" width="344" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="544" y="93" fill="#eb6c36" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">AWS EDGE AND INGRESS · PUBLICLY REACHABLE · NOT A SECURITY BOUNDARY</text>
+        <rect x="920" y="80" width="480" height="620" rx="8" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+        <rect x="932" y="84" width="352" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="1108" y="93" fill="rgba(45,49,66,0.40)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">PRIVATE RUNTIME · LAMBDA / UVICORN PROCESS · ALL AUTHZ ENFORCED HERE</text>
+        <rect x="40" y="720" width="1360" height="128" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+        <rect x="52" y="724" width="268" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="186" y="733" fill="rgba(45,49,66,0.40)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">SUPPLY CHAIN AND CI · CONTROLS WITH NO RUNTIME PATH</text>
+        <path d="M 272,184 L 400,184" fill="none" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+        <path d="M 600,184 L 660,184" fill="none" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+        <path d="M 860,184 L 960,184" fill="none" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+        <path d="M 1160,228 L 1160,300" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <path d="M 200,228 V 252 Q 200,260 208,260 H 752 Q 760,260 760,252 V 228" fill="none" stroke="#2e5aa8" stroke-width="1.0" stroke-dasharray="4,3" marker-end="url(#arrow-link)"/>
+        <path d="M 272,484 L 940,484" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <path d="M 1128,484 L 1180,484" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <path d="M 1280,440 L 1280,404" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <path d="M 1040,532 L 1040,600" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <rect x="316" y="166" width="40" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="336" y="175" fill="#2e5aa8" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">HTTPS</text>
+        <rect x="608" y="166" width="44" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="630" y="175" fill="#2e5aa8" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">/API/*</text>
+        <rect x="876" y="166" width="68" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="910" y="175" fill="#2e5aa8" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">HTTP EVENT</text>
+        <rect x="1168" y="258" width="128" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="1232" y="267" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">SQL · SSLMODE=REQUIRE</text>
+        <rect x="340" y="272" width="280" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="480" y="281" fill="#2e5aa8" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">DIRECT · PUBLICLY REACHABLE · BYPASSES CLOUDFRONT</text>
+        <rect x="416" y="466" width="380" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="606" y="475" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">AWS LAMBDA INVOKE · SOURCE=ACME.ADMIN.V1 · IAM LAMBDA:INVOKEFUNCTION</text>
+        <rect x="1134" y="466" width="40" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="1154" y="475" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">MATCH</text>
+        <rect x="1288" y="416" width="88" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="1332" y="425" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">MIGRATE / SEED</text>
+        <rect x="1048" y="560" width="84" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="1090" y="569" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">ANYTHING ELSE</text>
+        <rect x="72" y="140" width="200" height="88" rx="6" fill="#f5f5f5"/>
+        <rect x="72" y="140" width="200" height="88" rx="6" fill="rgba(79,93,117,0.10)" stroke="#7a8399" stroke-width="1"/>
+        <rect x="80" y="146" width="32" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+        <text x="96" y="155" fill="#7a8399" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">USER</text>
+        <text x="172" y="174" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Browser</text>
+        <text x="172" y="188" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">tokens in sessionStorage</text>
+        <text x="172" y="202" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">same-origin</text>
+        <text x="172" y="214" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">no CORS middleware</text>
+        <rect x="72" y="440" width="200" height="88" rx="6" fill="#f5f5f5"/>
+        <rect x="72" y="440" width="200" height="88" rx="6" fill="rgba(79,93,117,0.10)" stroke="#7a8399" stroke-width="1"/>
+        <rect x="80" y="446" width="52" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+        <text x="106" y="455" fill="#7a8399" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">OPERATOR</text>
+        <text x="172" y="474" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">tools/db.sh</text>
+        <text x="172" y="488" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">synchronous aws lambda invoke</text>
+        <text x="172" y="502" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">IAM lambda:InvokeFunction</text>
+        <text x="172" y="514" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">is the authorisation</text>
+        <rect x="400" y="140" width="200" height="88" rx="6" fill="#f5f5f5"/>
+        <rect x="400" y="140" width="200" height="88" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+        <rect x="408" y="146" width="32" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+        <text x="424" y="155" fill="#7a8399" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">EDGE</text>
+        <text x="500" y="181" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">CloudFront edge</text>
+        <text x="500" y="195" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">TLS only, path routing</text>
+        <text x="500" y="208" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">NOT a security boundary</text>
+        <rect x="660" y="140" width="200" height="88" rx="6" fill="#f5f5f5"/>
+        <rect x="660" y="140" width="200" height="88" rx="6" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/>
+        <rect x="668" y="146" width="44" height="12" rx="2" fill="transparent" stroke="rgba(235,108,54,0.50)" stroke-width="0.8"/>
+        <text x="690" y="155" fill="#eb6c36" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">INGRESS</text>
+        <text x="760" y="174" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Lambda Function URL</text>
+        <text x="760" y="188" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">auth NONE</text>
+        <text x="760" y="202" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">publicly reachable</text>
+        <text x="760" y="214" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">bypasses CloudFront</text>
+        <rect x="960" y="140" width="400" height="88" rx="6" fill="#f5f5f5"/>
+        <rect x="960" y="140" width="400" height="88" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="968" y="146" width="44" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+        <text x="990" y="155" fill="#2d3142" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">RUNTIME</text>
+        <text x="1160" y="174" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Lambda / uvicorn process</text>
+        <text x="1160" y="188" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">all authz enforced here</text>
+        <text x="1160" y="202" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">every authenticated route runs dependencies.current_user</text>
+        <text x="1160" y="214" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">(see security-auth-chain.html)</text>
+        <rect x="1160" y="300" width="200" height="104" rx="6" fill="#f5f5f5"/>
+        <rect x="1160" y="300" width="200" height="104" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+        <rect x="1168" y="306" width="20" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+        <text x="1178" y="315" fill="#4f5d75" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">DB</text>
+        <text x="1260" y="336" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Aurora PostgreSQL</text>
+        <text x="1260" y="350" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">not publicly accessible</text>
+        <text x="1260" y="363" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">encrypted · sslmode=require</text>
+        <text x="1260" y="376" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">DB password: 3-word pet name,</text>
+        <text x="1260" y="389" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">never a KDF input</text>
+        <polygon points="1040,436.0 1128.0,484 1040,532.0 952.0,484" fill="#f5f5f5"/>
+        <polygon points="1040,436.0 1128.0,484 1040,532.0 952.0,484" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/>
+        <text x="1040" y="482" fill="#2d3142" font-size="11" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">classify(event)</text>
+        <text x="1040" y="496" fill="#2d3142" font-size="11" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">positive match only</text>
+        <text x="1152" y="552" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="start">source == acme.admin.v1 · no HTTP keys</text>
+        <text x="1152" y="564" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="start">action in {migrate, seed, db-current}</text>
+        <rect x="1180" y="440" width="200" height="88" rx="6" fill="#f5f5f5"/>
+        <rect x="1180" y="440" width="200" height="88" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="1188" y="446" width="52" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+        <text x="1214" y="455" fill="#2d3142" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">S2 · S11</text>
+        <text x="1280" y="474" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">seed</text>
+        <text x="1280" y="488" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">admin password from the payload,</text>
+        <text x="1280" y="502" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">never in source</text>
+        <text x="1280" y="514" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">confirm == APP_ID · additive</text>
+        <rect x="940" y="600" width="200" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="940" y="600" width="200" height="64" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3"/>
+        <rect x="948" y="606" width="44" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+        <text x="970" y="615" fill="#4f5d75" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">REFUSED</text>
+        <text x="1040" y="629" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">RuntimeError</text>
+        <text x="1040" y="643" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">invocation refused</text>
+        <text x="1040" y="656" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">no fall-through to the web stack</text>
+        <rect x="72" y="752" width="400" height="80" rx="6" fill="#f5f5f5"/>
+        <rect x="72" y="752" width="400" height="80" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+        <rect x="80" y="758" width="20" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+        <text x="90" y="767" fill="#7a8399" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">CI</text>
+        <text x="272" y="789" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">GitHub Actions</text>
+        <text x="272" y="803" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">bandit -r ./backend · npm audit --audit-level=high</text>
+        <text x="272" y="816" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">Checkov on infra/</text>
+        <rect x="520" y="752" width="400" height="80" rx="6" fill="#f5f5f5"/>
+        <rect x="520" y="752" width="400" height="80" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+        <rect x="528" y="758" width="32" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+        <text x="544" y="767" fill="#7a8399" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">DEPS</text>
+        <text x="720" y="789" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Runtime deps pinned ==</text>
+        <text x="720" y="803" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">no passlib, no python-jose</text>
+        <text x="720" y="816" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">pip-audit via make audit</text>
+        <rect x="968" y="752" width="400" height="80" rx="6" fill="#f5f5f5"/>
+        <rect x="968" y="752" width="400" height="80" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+        <rect x="976" y="758" width="36" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+        <text x="994" y="767" fill="#7a8399" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">BUILD</text>
+        <text x="1168" y="796" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">make deploy = sync + verify-sync</text>
+        <text x="1168" y="810" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">a stale vendored kernel cannot ship silently</text>
+        <line x1="40" y1="884" x2="1400" y2="884" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+        <text x="40" y="900" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.18em">LEGEND</text>
+        <rect x="40" y="916" width="14" height="10" rx="2" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/>
+        <text x="60" y="925" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Public surface / privileged gate (focal)</text>
+        <rect x="288.0" y="916" width="14" height="10" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <text x="308.0" y="925" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Enforcing runtime</text>
+        <rect x="418.7" y="916" width="14" height="10" rx="2" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+        <text x="438.7" y="925" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Data store</text>
+        <rect x="513.7" y="916" width="14" height="10" rx="2" fill="rgba(79,93,117,0.10)" stroke="#7a8399" stroke-width="1"/>
+        <text x="533.7" y="925" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Actor</text>
+        <rect x="583.2" y="916" width="14" height="10" rx="2" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+        <text x="603.2" y="925" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Pass-through / control</text>
+        <rect x="739.4000000000001" y="916" width="14" height="10" rx="2" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3"/>
+        <text x="759.4000000000001" y="925" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Refused</text>
+<path d="M 819.1000000000001,921 L 847.1000000000001,921" fill="none" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+        <text x="855.1000000000001" y="925" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Permitted ingress</text>
+<path d="M 965.8000000000002,921 L 993.8000000000002,921" fill="none" stroke="#2e5aa8" stroke-width="1.0" stroke-dasharray="4,3" marker-end="url(#arrow-link)"/>
+        <text x="1001.8000000000002" y="925" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Unguarded bypass (authz still at runtime)</text>
+<path d="M 1234.9,921 L 1262.9,921" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <text x="1270.9" y="925" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Admin invocation</text>
+
+    </svg>
+    <p class="colophon">Redrawn from docs/design/diagrams with the diagram-design skill · default editorial skin · Security model</p>
+  </div>
+</body>
+</html>
