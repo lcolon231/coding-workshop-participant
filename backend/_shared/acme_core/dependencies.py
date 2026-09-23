@@ -31,7 +31,11 @@ from acme_core.security.tokens import TokenType, decode_token
 # envelope and the WWW-Authenticate challenge.
 _bearer = HTTPBearer(auto_error=False, description="An access token from POST /api/auth/login.")
 
-DbSession = Annotated[Session, Depends(get_db)]
+# scope="function": commit and close before the response is sent, so a client that
+# reads right after a 2xx sees the write, and a failed commit cannot follow a 2xx.
+# FastAPI 0.118+ defaults yield dependencies to "request" scope, which runs the
+# exit code after the response.
+DbSession = Annotated[Session, Depends(get_db, scope="function")]
 
 
 def bearer_token(
