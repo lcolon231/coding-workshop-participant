@@ -8,10 +8,23 @@
  */
 
 import { clearSession, readSession, saveSession } from './session'
+import { waitUntilReady } from './readiness'
 
 const NETWORK_MESSAGE = 'Could not reach the server. Check your connection and try again.'
 const NOT_JSON_MESSAGE = 'The server returned an unexpected response. Try again in a moment.'
 const SIGNED_OUT_MESSAGE = 'Your session has ended. Sign in again to continue.'
+const WOKE_MESSAGE =
+  'The database was waking up, so this may or may not have been saved. Check, then try again if needed.'
+
+// Failures that say nothing about the request itself: the edge timed out
+// (CloudFront 502/504), the service could not reach the database (500/503),
+// or nothing answered at all. Any of them is what a paused database looks like.
+const WAKING_STATUSES = new Set([0, 500, 502, 503, 504])
+
+/** Whether this failure could be the database waking up rather than a real refusal. */
+export function isWakingError(err) {
+  return err instanceof ApiError && WAKING_STATUSES.has(err.status)
+}
 
 /** A failed request, carrying the API's flat error envelope. */
 export class ApiError extends Error {
@@ -57,8 +70,31 @@ export function withQuery(path, params = {}) {
  *
  * Resolves with `null` on 204. Rejects with an ApiError for a network
  * failure, a non-JSON response, or any non-2xx status.
+ *
+ * A failure that looks like the database waking up is not final: the client
+ * waits for `readyz` and, if the API really was asleep and has now woken,
+ * retries once. A failure while the API was ready all along is what it
+ * looks like and is thrown as is. A POST is the exception when the server
+ * may already have acted on it (anything but a connection failure):
+ * replaying it could file the same incident twice, so the caller is told to
+ * check instead.
  */
-export async function request(path, { method = 'GET', body, token } = {}) {
+export async function request(path, options = {}) {
+  try {
+    return await send(path, options)
+  } catch (err) {
+    if (!isWakingError(err)) throw err
+    const outcome = await waitUntilReady()
+    if (outcome !== 'woke') throw err
+    const method = (options.method ?? 'GET').toUpperCase()
+    if (method === 'POST' && err.status !== 0) {
+      throw new ApiError({ status: err.status, error: 'database_waking', message: WOKE_MESSAGE, requestId: err.requestId })
+    }
+    return send(path, options)
+  }
+}
+
+async function send(path, { method = 'GET', body, token } = {}) {
   const headers = { Accept: 'application/json' }
   const payload = body === undefined ? undefined : JSON.stringify(body)
   if (payload !== undefined) {

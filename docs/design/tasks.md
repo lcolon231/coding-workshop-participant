@@ -17,10 +17,10 @@ are placed in the phase where they belong.
 | 2 | `auth` service | 16 / 16 |
 | 3 | `incidents` service | 15 / 16 |
 | 4 | `facilities` service | 9 / 10 |
-| 5 | Frontend | 16 / 24 |
+| 5 | Frontend | 18 / 24 |
 | 6 | Cloud, CI and operations | 3 / 14 |
 | 7 | Documentation and handover | 0 / 7 |
-| | **Total** | **74 / 122** |
+| | **Total** | **76 / 122** |
 
 ---
 
@@ -138,8 +138,8 @@ Currently one line of work is allocated. **Roughly 2.5 of the rubric's 5 compete
 - [x] **T89** Reporting dashboard — SLA and volume charts. *(`pages/ReportsPage.jsx` over I15–I17: range presets, dates and building in the URL; KPI tiles and one-hue bar lists from the summary, an SLA table with within-target meters and the D8 targets, and a stacked-column volume chart drawn as inline SVG with fixed colour slots, legend, hover and keyboard tooltip, and a table view; each report loads and retries on its own; no chart library added; 7 tests)*
 - [ ] **T90** Responsive behaviour via React Responsive; verify at mobile, tablet, desktop.
 - [ ] **T91** Accessibility — labels, focus order, keyboard navigation, contrast, ARIA on dynamic regions.
-- [ ] **T92** Consistent loading / success / failure feedback across every mutation.
-- [ ] **T93** "Waking the database" state for the Aurora resume case, rather than a generic spinner.
+- [x] **T92** Consistent loading / success / failure feedback across every mutation. *(audited every mutation: forms and dialogs own `submitting` + an in-flight button label + inline `details[]` and form-level errors; lists and pages mark `aria-busy` and dim; after-the-fact outcomes all go through one `components/Notice.jsx`, a success announced as `status` that fades, a failure announced as `alert` that stays until dismissed. Fixed the three one-click actions (reactivate, retire, restore) that had reported failures through the success toast)*
+- [x] **T93** "Waking the database" state for the Aurora resume case, rather than a generic spinner. *(`services/readiness.js` polls `/api/auth/readyz` every 3 s for up to 90 s and publishes its progress; `services/api.js` treats a 0/500/502/503/504 as possibly-waking, waits, and retries once, except a POST the server may already have acted on, which is refused with a "check, then try again" error rather than replayed; `components/WakingBanner.jsx` sits above the routes and says what is happening with an elapsed count, so every page's own loading state simply lasts longer. First probe is silent, so a genuine 500 never shows the banner)*
 - [ ] **T94** PWA — manifest, service worker, offline shell *(rubric §5)*.
 - [x] **T95** Vitest + React Testing Library setup. *(jsdom, `src/test/setup.js`, router-aware `renderPage` helper)*
 - [x] **T96** Component tests to **80%+** *(rubric)*. *(100 Vitest tests over 15 files; 85.9% statements, 79.9% branches measured 2026-09-23; `vite.config.js` now fails `test:coverage`, and so CI, below 80% statements/lines/functions and 75% branches)*

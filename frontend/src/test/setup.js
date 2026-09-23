@@ -1,6 +1,11 @@
 import { afterEach, vi } from 'vitest'
 import { cleanup } from '@testing-library/react'
 import '@testing-library/jest-dom/vitest'
+import { configureReadiness } from '../services/readiness'
+
+// A failed request probes readiness once and, in tests, never polls: the
+// readiness tests pass their own deadline and interval explicitly.
+configureReadiness({ deadlineMs: 0, intervalMs: 0 })
 
 /**
  * jsdom has no `matchMedia`. Report a desktop viewport by default: any
