@@ -21,10 +21,15 @@ import useMediaQuery from '@mui/material/useMediaQuery'
 import { visuallyHidden } from '@mui/utils'
 import { ClipboardText, MagnifyingGlass } from '@phosphor-icons/react'
 import { useAuth } from '../auth/AuthContext'
+import IncidentOverview from '../components/admin/IncidentOverview'
 import { PriorityChip, StatusChip } from '../components/IncidentChips'
+import Notice from '../components/Notice'
 import { EmptyState, LoadError } from '../components/PageState'
-import { formatDateTime, formatRelative } from '../lib/format'
-import { PAGE_SIZE, PRIORITIES, SORT_OPTIONS, STATUSES } from '../lib/incidents'
+import { saveTextFile } from '../lib/download'
+import { formatDateTime, formatRelative, isoDate } from '../lib/format'
+import { PAGE_SIZE, PRIORITIES, SORT_OPTIONS, STATUSES, isAdmin } from '../lib/incidents'
+import { collectAll, incidentsCsv } from '../lib/reports'
+import { listBuildings } from '../services/facilities'
 import { listIncidents } from '../services/incidents'
 
 const DEFAULT_SORT = SORT_OPTIONS[0].value
@@ -200,6 +205,9 @@ export default function IncidentsPage() {
   const [attempt, setAttempt] = useState(0)
   const key = `${searchParams.toString()}#${attempt}`
   const [result, setResult] = useState({ key: null, page: null, error: null })
+  const [exporting, setExporting] = useState(false)
+  const [notice, setNotice] = useState(null)
+  const admin = isAdmin(user)
 
   const update = useCallback(
     (changes) => {
@@ -223,14 +231,21 @@ export default function IncidentsPage() {
     return () => clearTimeout(timer)
   }, [searchText, filters.search, update])
 
-  useEffect(() => {
-    let cancelled = false
-    const [sort, order] = filters.sort.split(':')
-    listIncidents({
+  const query = useMemo(
+    () => ({
       status: filters.status,
       priority: filters.priority,
       search: filters.search,
       assignee_id: filters.mine ? user.id : '',
+    }),
+    [filters, user.id],
+  )
+
+  useEffect(() => {
+    let cancelled = false
+    const [sort, order] = filters.sort.split(':')
+    listIncidents({
+      ...query,
       sort,
       order,
       limit: PAGE_SIZE,
@@ -245,7 +260,25 @@ export default function IncidentsPage() {
     return () => {
       cancelled = true
     }
-  }, [filters, user.id, key])
+  }, [filters, query, key])
+
+  /** Every incident the current filters match, oldest first, as one CSV file. */
+  async function exportCsv() {
+    setExporting(true)
+    try {
+      const [buildings, items] = await Promise.all([
+        listBuildings(),
+        collectAll((paging) => listIncidents({ ...query, sort: 'created_at', order: 'asc', ...paging })),
+      ])
+      const names = new Map(buildings.items.map((building) => [building.id, building.name]))
+      saveTextFile(`incidents-${isoDate(new Date())}.csv`, incidentsCsv(items, names))
+      setNotice(`Exported ${items.length} incident${items.length === 1 ? '' : 's'}.`)
+    } catch (err) {
+      setNotice({ message: `Could not export: ${err.message}`, severity: 'error' })
+    } finally {
+      setExporting(false)
+    }
+  }
 
   const loading = result.key !== key
   const { page } = result
@@ -269,6 +302,8 @@ export default function IncidentsPage() {
               : 'Everything you have reported.'}
         </Typography>
       </Box>
+
+      {admin && <IncidentOverview />}
 
       <Stack
         component="form"
@@ -334,6 +369,16 @@ export default function IncidentsPage() {
             sx={{ mr: 0 }}
           />
         )}
+        {admin && (
+          <Button
+            variant="outlined"
+            onClick={exportCsv}
+            disabled={exporting || !page || page.total === 0}
+            sx={{ minHeight: 40, whiteSpace: 'nowrap', ml: { sm: 'auto' } }}
+          >
+            {exporting ? 'Exporting…' : 'Download CSV'}
+          </Button>
+        )}
       </Stack>
 
       {error && <LoadError message={error} onRetry={() => setAttempt((n) => n + 1)} />}
@@ -387,6 +432,8 @@ export default function IncidentsPage() {
           )}
         </Box>
       )}
+
+      <Notice notice={notice} onClose={() => setNotice(null)} />
     </Stack>
   )
 }

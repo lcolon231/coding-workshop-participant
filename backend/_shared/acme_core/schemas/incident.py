@@ -95,11 +95,25 @@ class IncidentFilters(PageParams):
     category_id: uuid.UUID | None = None
     assignee_id: uuid.UUID | None = None
     search: Annotated[str | None, Field(max_length=200)] = None
+    # Inclusive dates on `created_at`, so the dashboard can list exactly the
+    # incidents its reports counted (the same window rule as `ReportRange`).
+    created_from: dt.date | None = None
+    created_to: dt.date | None = None
     # A literal allowlist, never a raw column name. Interpolating a client
     # string into ORDER BY is injectable, and getattr(Model, value) allows
     # traversal onto relationships and dunder attributes.
     sort: Annotated[str, Field(pattern="^(created_at|priority|status|title)$")] = "created_at"
     order: Order = "desc"
+
+    @model_validator(mode="after")
+    def _dates_in_order(self) -> IncidentFilters:
+        if (
+            self.created_from is not None
+            and self.created_to is not None
+            and self.created_from > self.created_to
+        ):
+            raise ValueError("created_from must not be after created_to")
+        return self
 
 
 class NoteCreate(StrictModel):

@@ -35,6 +35,8 @@ from acme_core.schemas.incident import (
     WorkflowOut,
 )
 from acme_core.schemas.report import (
+    BuildingsReport,
+    EngineersReport,
     ReportRange,
     SlaParams,
     SlaReport,
@@ -155,6 +157,36 @@ def report_volume(
     """Incidents created per day or week, split by status, priority or category."""
     del admin
     return service.volume_report(session, params)
+
+
+@router.get(
+    "/reports/buildings",
+    response_model=BuildingsReport,
+    responses=error_responses(400, 401, 403),
+    tags=["reports"],
+    summary="Incidents per building",
+)
+def report_buildings(
+    admin: AdminPrincipal, session: DbSession, window: Annotated[ReportRange, Query()]
+) -> BuildingsReport:
+    """Every building with how many incidents it generated in the window, busiest first."""
+    del admin
+    return service.buildings_report(session, window)
+
+
+@router.get(
+    "/reports/engineers",
+    response_model=EngineersReport,
+    responses=error_responses(400, 401, 403),
+    tags=["reports"],
+    summary="Engineer workload and throughput",
+)
+def report_engineers(
+    admin: AdminPrincipal, session: DbSession, window: Annotated[ReportRange, Query()]
+) -> EngineersReport:
+    """Every engineer with what they hold and what they completed in the window."""
+    del admin
+    return service.engineers_report(session, window)
 
 
 # --------------------------------------------------------------------------- the collection

@@ -399,6 +399,8 @@ here. Paths are keyed by **user id**, which the client already has, not by profi
 | I15 | GET | `/reports/summary` | ADM | 200 `SummaryReport` | T59 |
 | I16 | GET | `/reports/sla` | ADM | 200 `SlaReport` | T59 |
 | I17 | GET | `/reports/volume` | ADM | 200 `VolumeReport` | T59 |
+| I18 | GET | `/reports/buildings` | ADM | 200 `BuildingsReport` | T124 |
+| I19 | GET | `/reports/engineers` | ADM | 200 `EngineersReport` | T124 |
 
 **Route order matters.** `/workflow`, `/escalations` and `/reports/*` must be registered **before**
 `/{incident_id}`. The typed UUID parameter would reject them anyway, but as a confusing `400` rather
@@ -440,7 +442,8 @@ means widening `scope_incidents`, which is the most security-sensitive function 
 
 ### I2 `GET /api/incidents`
 
-Filters: `status`, `priority`, `building_id`, `category_id`, `assignee_id`, `search` (title and
+Filters: `status`, `priority`, `building_id`, `category_id`, `assignee_id`, `created_from` and
+`created_to` (inclusive UTC dates on `created_at`, `400` when inverted), `search` (title and
 description, ≤200 chars). `sort ∈ {created_at, priority, status, title}`, default `created_at desc`.
 
 Every filter is applied **inside** the scope, so no filter can widen it — an employee passing
@@ -555,9 +558,9 @@ An escalation is a request to raise an incident's priority, decided by an admin.
   The field is `decision`, not `status`: `status` is on the server-controlled list and the schema
   test would (rightly) reject it.
 
-### I15–I17 Reports — admin
+### I15–I19 Reports — admin
 
-All three share query parameters: `from`, `to` (dates, inclusive; default the last 30 days; range at
+All five share query parameters: `from`, `to` (dates, inclusive; default the last 30 days; range at
 most 366 days, else `400`) and an optional `building_id`. Each is a single `GROUP BY` over the
 stamped timestamps on `incidents` — no window functions, no scan of the history table (plan).
 
@@ -570,6 +573,20 @@ stamped timestamps on `incidents` — no window functions, no scan of the histor
   Medium 3 d, Low 7 d, as constants in code.
 - **`/reports/volume?interval=day|week&group_by=status|priority|category`** — incidents created per
   bucket via `date_trunc`, for the dashboard charts (T89).
+- **`/reports/buildings`** — per building: incidents in the window, how many are still open (not
+  Resolved or Closed) and how many are Critical, busiest first. An outer join from `buildings` with
+  the window on the join, so every active building appears even at zero; a retired building only
+  while it still has incidents in the window.
+- **`/reports/engineers`** — per engineer: incidents in the window assigned to them now, how many
+  are still open, how many they completed (Resolved or Closed **with** `resolved_at`, so an
+  incident closed without work counts for nobody) and the mean report-to-resolution over those,
+  most completed first. Same outer-join shape: every active engineer appears even idle, a
+  deactivated one only while they still hold incidents.
+
+Both feed the admin overview on the landing page (T124). The "Download CSV" beside the list is
+the ordinary list (I2) walked page by page under its current filters; `created_from` /
+`created_to` on I2 use the same inclusive UTC dates as the reports, for a client that wants
+exactly the rows a report counted.
 
 ---
 
