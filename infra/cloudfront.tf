@@ -6,6 +6,14 @@ resource "aws_cloudfront_origin_access_control" "this" {
   signing_protocol                  = "sigv4"
 }
 
+resource "aws_cloudfront_origin_access_control" "lambda" {
+  count                             = data.aws_caller_identity.this.id != "000000000000" ? 1 : 0
+  name                              = format("%s-lambda-origin-%s", var.aws_project, local.app_id)
+  origin_access_control_origin_type = "lambda"
+  signing_behavior                  = "always"
+  signing_protocol                  = "sigv4"
+}
+
 resource "aws_cloudfront_distribution" "this" {
   count               = data.aws_caller_identity.this.id != "000000000000" ? 1 : 0
   enabled             = true
@@ -22,8 +30,9 @@ resource "aws_cloudfront_distribution" "this" {
   dynamic "origin" {
     for_each = local.function_origins
     content {
-      domain_name = origin.value.domain_name
-      origin_id   = origin.value.origin_id
+      domain_name              = origin.value.domain_name
+      origin_id                = origin.value.origin_id
+      origin_access_control_id = element(aws_cloudfront_origin_access_control.lambda.*.id, count.index)
 
       custom_header {
         name  = "X-Forwarded-Host"
@@ -146,4 +155,27 @@ resource "aws_s3_bucket_policy" "this" {
       }
     ]
   })
+}
+
+# The function URLs require IAM auth (lambda.tf). These grants let this
+# distribution, and nothing else, invoke them. AWS documents both actions for
+# an origin access control of type "lambda".
+resource "aws_lambda_permission" "cloudfront_url" {
+  for_each = { for k, v in local.function_names : k => v if !local.is_local }
+
+  statement_id  = "AllowCloudFrontServicePrincipal"
+  action        = "lambda:InvokeFunctionUrl"
+  function_name = module.lambda[each.key].lambda_function_name
+  principal     = "cloudfront.amazonaws.com"
+  source_arn    = one(aws_cloudfront_distribution.this.*.arn)
+}
+
+resource "aws_lambda_permission" "cloudfront_invoke" {
+  for_each = { for k, v in local.function_names : k => v if !local.is_local }
+
+  statement_id  = "AllowCloudFrontServicePrincipalInvokeFunction"
+  action        = "lambda:InvokeFunction"
+  function_name = module.lambda[each.key].lambda_function_name
+  principal     = "cloudfront.amazonaws.com"
+  source_arn    = one(aws_cloudfront_distribution.this.*.arn)
 }

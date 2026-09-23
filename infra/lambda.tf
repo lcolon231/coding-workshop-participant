@@ -38,17 +38,15 @@ module "lambda" {
   use_existing_cloudwatch_log_group = false
   trigger_on_package_timestamp      = false
   create_lambda_function_url        = true
-  authorization_type                = "NONE"
-  dead_letter_target_arn            = aws_sqs_queue.this[each.key].arn
+  # On AWS only CloudFront may invoke the URLs: it signs origin requests with
+  # SigV4 through an origin access control (cloudfront.tf). LocalStack has no
+  # CloudFront, so the frontend calls the URLs directly there.
+  authorization_type     = local.is_local ? "NONE" : "AWS_IAM"
+  dead_letter_target_arn = aws_sqs_queue.this[each.key].arn
 
-  cors = {
-    allow_credentials = false
-    allow_headers     = ["*"]
-    allow_methods     = ["*"]
-    allow_origins     = ["*"]
-    expose_headers    = []
-    max_age           = 0
-  }
+  # An empty map disables the CORS block in the module. A conditional cannot
+  # return `{}` against a populated object, hence the filtered `for`.
+  cors = { for k, v in local.lambda_cors_local : k => v if local.is_local }
 
   environment_variables = {
     for key, value in local.env_vars :

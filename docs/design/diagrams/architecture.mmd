@@ -29,7 +29,7 @@ flowchart TB
         CF["CloudFront distribution<br/>redirect-to-https<br/>404 -> 200 /index.html (ttl 300 s)"]
         S3[("S3 website bucket<br/>frontend/dist via OAC")]
 
-        subgraph Lambdas["Lambda functions: python3.13, 128 MB, 300 s, Function URL auth NONE"]
+        subgraph Lambdas["Lambda functions: python3.13, 128 MB, 300 s, Function URL auth AWS_IAM via CloudFront OAC"]
             AuthFn["auth Lambda<br/>/api/auth/*<br/>register login refresh logout me users"]
             IncFn["incidents Lambda<br/>/api/incidents/*<br/>incidents notes history escalations reports workflow"]
             FacFn["facilities Lambda<br/>/api/facilities/*<br/>buildings floors seats categories engineers"]

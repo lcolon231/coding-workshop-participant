@@ -259,6 +259,8 @@ control is a security boundary; `@acme.inc` is input validation, not authenticat
 workshop IAM policy grants `lambda:InvokeFunction` on `*`, any participant could run `seed` against
 another's database. All three go in NOTES.md.
 
+*Later (T123): the first of these is closed. On AWS the Function URLs now require IAM and only the CloudFront distribution may invoke them, through an origin access control. CloudFront still does not authorise anything; every check remains in the process.*
+
 ## Architecture & correctness corrections
 
 **A1 — `bin/deploy-backend.sh` never calls the sync.** It is `terraform apply` only, so the repo's
@@ -498,8 +500,8 @@ CloudFront URL, plus `curl -i "$CF_URL/api/auth/nope"` compared against uvicorn 
 
 ## Risks for NOTES.md
 
-Aurora password is a 3-word pet name and must never be a KDF input · the Function URL is public and
-bypasses CloudFront, so no edge control is a security boundary · `@acme.inc` is validation, not
+Aurora password is a 3-word pet name and must never be a KDF input · the Function URL is IAM-only behind
+CloudFront (T123), but no edge control is an authorization boundary · `@acme.inc` is validation, not
 authentication · burst connection exhaustion needs `reserved_concurrent_executions` (Terraform) and
 is an accepted gap · CloudFront rewrites API 404s to `200 index.html` · first cloud request can 504
 on Aurora resume · AWS session credentials in `ENVIRONMENT.config` expire · deploying from non-x86-64
