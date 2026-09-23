@@ -270,3 +270,6 @@ backend/_shared/acme_core/_build_stamp.py
 .claude/skills/
 skills-lock.json
 agent-skills/
+
+# Local screenshots from visual checks, never committed
+/screenshots/
