@@ -204,4 +204,13 @@ describe('IncidentsPage', () => {
     await screen.findByText('Showing 1 to 2 of 2')
     expect(screen.queryByRole('checkbox', { name: 'Assigned to me' })).not.toBeInTheDocument()
   })
+
+  it('shows the confirmation a page arrived with', async () => {
+    stubApi([['GET', '/api/incidents', () => jsonResponse(200, page(TWO))]])
+    renderList({
+      user: ENGINEER,
+      initialEntries: [{ pathname: '/', state: { notice: 'Incident created successfully.' } }],
+    })
+    expect(await screen.findByRole('status')).toHaveTextContent('Incident created successfully.')
+  })
 })
