@@ -12,6 +12,7 @@ import WakingBanner from './components/WakingBanner'
 import FacilitiesPage from './pages/FacilitiesPage'
 import IncidentPage from './pages/IncidentPage'
 import IncidentsPage from './pages/IncidentsPage'
+import LandingPage from './pages/LandingPage'
 import LoginPage from './pages/LoginPage'
 import NewIncidentPage from './pages/NewIncidentPage'
 import RegisterPage from './pages/RegisterPage'
@@ -23,15 +24,17 @@ const ADMIN = ['Facility Admin']
 /**
  * Gate everything behind a loaded user.
  *
- * No session sends the visitor to sign in, remembering where they were going.
- * A session still being checked shows the frame of the page rather than a
- * flash of the sign-in screen.
+ * No session at the root shows the landing page; no session anywhere else
+ * sends the visitor to sign in, remembering where they were going. A session
+ * still being checked shows the frame of the page rather than a flash of the
+ * sign-in screen.
  */
 function RequireUser({ children }) {
   const location = useLocation()
   const { status, error, retry, signOut } = useAuth()
 
   if (status === 'anonymous') {
+    if (location.pathname === '/') return <LandingPage />
     return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />
   }
   if (status === 'error') {

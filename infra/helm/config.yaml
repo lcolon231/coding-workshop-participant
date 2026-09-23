@@ -11,7 +11,13 @@ hub:
       server_port: 389
       server_args:
         get_info: "ALL"
-      tls_strategy: "insecure"
+      # StartTLS on 389 before the bind, so participants' AD passwords never
+      # cross the network in the clear. The domain controllers must present a
+      # certificate (server-side LDAPS on AWS Managed Microsoft AD); the bind
+      # fails closed if they do not. To also verify that certificate, add
+      #   tls_kwargs: { ca_certs_file: "<path>", validate: 2 }
+      # and point server_address at the directory's DNS name, not an IP.
+      tls_strategy: "before_bind"
       user_attribute: "sAMAccountName"
       bind_dn_template:
         - "CN={username},OU=Users,OU=CORP,DC=corp,DC=codingworkshop,DC=net"
