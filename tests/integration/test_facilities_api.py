@@ -173,6 +173,10 @@ class Api:
     def building(self, headers: dict[str, str], **overrides: Any) -> dict[str, Any]:
         return self._create("buildings", headers, {"code": "NEW", "name": "New wing", **overrides})
 
+    def floor(self, headers: dict[str, str], **overrides: Any) -> dict[str, Any]:
+        body = {"building_id": str(self.world.hq.id), "level": 3, **overrides}
+        return self._create("floors", headers, body)
+
 
 @pytest.fixture
 def api(facilities_client: TestClient, world: World) -> Api:
@@ -195,7 +199,7 @@ def stored(session: Session, model: type, row_id: Any) -> Any:
 
 class TestRouteContract:
     PUBLIC = {("GET", f"{P}/healthz"), ("GET", f"{P}/readyz")}
-    PROTECTED_ROUTES = 5
+    PROTECTED_ROUTES = 10
 
     def test_every_other_route_rejects_an_anonymous_caller(
         self, facilities_client: TestClient
@@ -464,4 +468,196 @@ class TestBuildingDelete:
         self, facilities_client: TestClient, actors: Actors
     ) -> None:
         resp = facilities_client.delete(f"{P}/buildings/{uuid.uuid4()}", headers=actors.admin)
+        assert resp.status_code == 404
+
+
+# --------------------------------------------------------------------------- floors
+
+
+class TestFloorList:
+    def test_lists_a_buildings_floors_lowest_first(
+        self, facilities_client: TestClient, actors: Actors, api: Api, world: World
+    ) -> None:
+        api.floor(actors.admin, level=-1, name="Basement")
+        page = facilities_client.get(
+            f"{P}/buildings/{world.hq.id}/floors", headers=actors.employee
+        ).json()
+        assert [(f["level"], f["name"]) for f in page["items"]] == [
+            (-1, "Basement"),
+            (1, "Ground"),
+            (2, None),
+        ]
+        assert page["total"] == 3
+        assert all(f["building_id"] == str(world.hq.id) for f in page["items"])
+
+    def test_sorts_by_name_on_request(
+        self, facilities_client: TestClient, actors: Actors, world: World
+    ) -> None:
+        page = facilities_client.get(
+            f"{P}/buildings/{world.hq.id}/floors",
+            params={"sort": "name", "order": "desc"},
+            headers=actors.employee,
+        ).json()
+        assert [f["level"] for f in page["items"]] == [2, 1]
+
+    def test_a_retired_buildings_floors_are_for_admins_only(
+        self, facilities_client: TestClient, actors: Actors, world: World
+    ) -> None:
+        url = f"{P}/buildings/{world.old.id}/floors"
+        assert facilities_client.get(url, headers=actors.employee).status_code == 404
+        page = facilities_client.get(url, headers=actors.admin).json()
+        assert [f["level"] for f in page["items"]] == [1]
+
+    def test_an_unknown_building_is_not_found(
+        self, facilities_client: TestClient, actors: Actors
+    ) -> None:
+        resp = facilities_client.get(f"{P}/buildings/{uuid.uuid4()}/floors", headers=actors.admin)
+        assert resp.status_code == 404
+
+
+class TestFloorGet:
+    def test_a_floor_is_as_visible_as_its_building(
+        self, facilities_client: TestClient, actors: Actors, world: World
+    ) -> None:
+        url = f"{P}/floors/{world.old_floor.id}"
+        hidden = facilities_client.get(url, headers=actors.employee)
+        assert (hidden.status_code, hidden.json()["error"]) == (404, "not_found")
+        assert facilities_client.get(url, headers=actors.admin).status_code == 200
+
+    def test_returns_the_floor(
+        self, facilities_client: TestClient, actors: Actors, world: World
+    ) -> None:
+        body = facilities_client.get(f"{P}/floors/{world.ground.id}", headers=actors.employee)
+        assert body.json() == {
+            "id": str(world.ground.id),
+            "building_id": str(world.hq.id),
+            "level": 1,
+            "name": "Ground",
+        }
+
+
+class TestFloorCreate:
+    def test_creates_and_points_at_the_new_row(
+        self, facilities_client: TestClient, actors: Actors, world: World, verify_session: Session
+    ) -> None:
+        resp = facilities_client.post(
+            f"{P}/floors",
+            json={"building_id": str(world.hq.id), "level": 3, "name": "Third"},
+            headers=actors.admin,
+        )
+        assert resp.status_code == 201, resp.text
+        assert resp.headers["Location"] == f"{P}/floors/{resp.json()['id']}"
+        row = stored(verify_session, Floor, resp.json()["id"])
+        assert (row.building_id, row.level, row.name) == (world.hq.id, 3, "Third")
+
+    def test_an_unknown_building_is_a_validation_error_on_the_field(
+        self, facilities_client: TestClient, actors: Actors
+    ) -> None:
+        resp = facilities_client.post(
+            f"{P}/floors", json={"building_id": str(uuid.uuid4()), "level": 3}, headers=actors.admin
+        )
+        assert (resp.status_code, resp.json()["error"]) == (400, "validation_error")
+        assert [d["field"] for d in resp.json()["details"]] == ["building_id"]
+
+    def test_a_duplicate_level_is_a_conflict(
+        self, facilities_client: TestClient, actors: Actors, world: World
+    ) -> None:
+        resp = facilities_client.post(
+            f"{P}/floors", json={"building_id": str(world.hq.id), "level": 1}, headers=actors.admin
+        )
+        assert (resp.status_code, resp.json()["error"]) == (409, "conflict")
+
+    def test_non_admins_are_refused(
+        self, facilities_client: TestClient, actors: Actors, world: World
+    ) -> None:
+        resp = facilities_client.post(
+            f"{P}/floors",
+            json={"building_id": str(world.hq.id), "level": 9},
+            headers=actors.engineer,
+        )
+        assert resp.status_code == 403
+
+
+class TestFloorUpdate:
+    def test_changes_level_and_clears_name(
+        self, facilities_client: TestClient, actors: Actors, world: World, verify_session: Session
+    ) -> None:
+        url = f"{P}/floors/{world.ground.id}"
+        resp = facilities_client.put(url, json={"level": 0, "name": None}, headers=actors.admin)
+        assert resp.status_code == 200, resp.text
+        assert (resp.json()["level"], resp.json()["name"]) == (0, None)
+        row = stored(verify_session, Floor, world.ground.id)
+        assert (row.level, row.name) == (0, None)
+
+    def test_moving_onto_an_existing_level_is_a_conflict(
+        self, facilities_client: TestClient, actors: Actors, world: World
+    ) -> None:
+        resp = facilities_client.put(
+            f"{P}/floors/{world.ground.id}", json={"level": 2}, headers=actors.admin
+        )
+        assert (resp.status_code, resp.json()["error"]) == (409, "conflict")
+
+    @pytest.mark.parametrize("body", [{"level": None}, {"building_id": NIL}])
+    def test_rejects_a_null_level_and_re_parenting(
+        self, facilities_client: TestClient, actors: Actors, world: World, body: dict[str, Any]
+    ) -> None:
+        resp = facilities_client.put(
+            f"{P}/floors/{world.ground.id}", json=body, headers=actors.admin
+        )
+        assert (resp.status_code, resp.json()["error"]) == (400, "validation_error")
+
+    def test_an_unknown_floor_is_not_found(
+        self, facilities_client: TestClient, actors: Actors
+    ) -> None:
+        resp = facilities_client.put(
+            f"{P}/floors/{uuid.uuid4()}", json={"level": 5}, headers=actors.admin
+        )
+        assert resp.status_code == 404
+
+
+class TestFloorDelete:
+    def test_an_empty_floor_is_deleted(
+        self, facilities_client: TestClient, actors: Actors, world: World, verify_session: Session
+    ) -> None:
+        resp = facilities_client.delete(f"{P}/floors/{world.second.id}", headers=actors.admin)
+        assert resp.status_code == 204
+        assert stored(verify_session, Floor, world.second.id) is None
+
+    def test_a_floor_with_seats_is_refused_and_its_seats_survive(
+        self, facilities_client: TestClient, actors: Actors, world: World, verify_session: Session
+    ) -> None:
+        resp = facilities_client.delete(f"{P}/floors/{world.ground.id}", headers=actors.admin)
+        assert (resp.status_code, resp.json()["error"]) == (409, "conflict")
+        assert resp.json()["message"] == (
+            "Floor has 2 seats and 0 incidents; it cannot be deleted while either remains."
+        )
+        assert stored(verify_session, Floor, world.ground.id) is not None
+        assert count(verify_session, Seat, floor_id=world.ground.id) == 2
+
+    def test_a_floor_named_by_an_incident_is_refused_and_the_incident_keeps_it(
+        self,
+        facilities_client: TestClient,
+        actors: Actors,
+        world: World,
+        make_incident: Any,
+        verify_session: Session,
+    ) -> None:
+        """The FK is SET NULL, so only this check stands between the delete and a lost location."""
+        floor_id = world.second.id
+        incident_id = make_incident(floor_id=floor_id).id
+        resp = facilities_client.delete(f"{P}/floors/{floor_id}", headers=actors.admin)
+        assert resp.status_code == 409
+        assert resp.json()["message"].startswith("Floor has 0 seats and 1 incident;")
+        assert stored(verify_session, Incident, incident_id).floor_id == floor_id
+
+    def test_a_non_admin_is_refused_before_the_lookup(
+        self, facilities_client: TestClient, actors: Actors
+    ) -> None:
+        resp = facilities_client.delete(f"{P}/floors/{uuid.uuid4()}", headers=actors.employee)
+        assert resp.status_code == 403
+
+    def test_an_unknown_floor_is_not_found(
+        self, facilities_client: TestClient, actors: Actors
+    ) -> None:
+        resp = facilities_client.delete(f"{P}/floors/{uuid.uuid4()}", headers=actors.admin)
         assert resp.status_code == 404

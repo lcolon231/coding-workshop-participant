@@ -23,13 +23,14 @@ from sqlalchemy.orm import Session
 
 from acme_core.models import Building, Floor, Incident, Seat
 from acme_core.pagination import like_pattern, paginate
-from acme_core.schemas.facility import BuildingFilters
+from acme_core.schemas.facility import BuildingFilters, FloorFilters
 
 _BUILDING_SORTS: Mapping[str, ColumnElement[Any]] = {
     "code": Building.code,
     "name": Building.name,
     "created_at": Building.created_at,
 }
+_FLOOR_SORTS: Mapping[str, ColumnElement[Any]] = {"level": Floor.level, "name": Floor.name}
 
 
 def _matches(columns: Iterable[ColumnElement[Any]], term: str) -> ColumnElement[bool]:
@@ -112,6 +113,51 @@ def count_incidents_in_building(session: Session, building_id: uuid.UUID) -> int
     return _count_incidents(session, Incident.building_id == building_id)
 
 
+# --------------------------------------------------------------------------- floors
+
+
+def _floors(*, include_inactive: bool) -> Select[Any]:
+    """A select over floors, narrowed to active buildings unless told otherwise.
+
+    Floors have no flag of their own: a floor is as visible as its building.
+    """
+    statement = select(Floor).join(Building)
+    if not include_inactive:
+        statement = statement.where(Building.is_active.is_(True))
+    return statement
+
+
+def list_floors(
+    session: Session, building_id: uuid.UUID, filters: FloorFilters
+) -> tuple[list[Floor], int]:
+    """Page through one building's floors. The service has already checked the building."""
+    statement = select(Floor).where(Floor.building_id == building_id)
+    return paginate(
+        session,
+        statement,
+        filters,
+        sort_columns=_FLOOR_SORTS,
+        sort=filters.sort,
+        order=filters.order,
+        tiebreaker=Floor.id,
+    )
+
+
+def get_floor(
+    session: Session, floor_id: uuid.UUID, *, include_inactive: bool, for_update: bool = False
+) -> Floor | None:
+    """Fetch one floor the caller may see, optionally locked for the transaction."""
+    statement = _floors(include_inactive=include_inactive).where(Floor.id == floor_id)
+    if for_update:
+        statement = statement.with_for_update(of=Floor)
+    return session.execute(statement).scalar_one_or_none()
+
+
 def count_seats(session: Session, floor_id: uuid.UUID) -> int:
     """How many seats a floor has."""
     return _count(session, select(Seat.id).where(Seat.floor_id == floor_id))
+
+
+def count_incidents_on_floor(session: Session, floor_id: uuid.UUID) -> int:
+    """How many incidents, in any status, name this floor."""
+    return _count_incidents(session, Incident.floor_id == floor_id)

@@ -24,11 +24,18 @@ from typing import Any
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from acme_core.exceptions import Conflict, NotFound
+from acme_core.exceptions import Conflict, NotFound, ValidationFailed
 from acme_core.logging_config import get_logger
-from acme_core.models import Building
+from acme_core.models import Building, Floor
 from acme_core.schemas.common import UpdateModel
-from acme_core.schemas.facility import BuildingCreate, BuildingFilters, BuildingUpdate
+from acme_core.schemas.facility import (
+    BuildingCreate,
+    BuildingFilters,
+    BuildingUpdate,
+    FloorCreate,
+    FloorFilters,
+    FloorUpdate,
+)
 from acme_core.security.principal import Principal
 from facilities_service import repository as repo
 
@@ -42,6 +49,13 @@ def _lists_inactive(principal: Principal, filters: Any) -> bool:
 
 def _plural(count: int, noun: str) -> str:
     return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
+
+
+def _missing(field: str, message: str) -> ValidationFailed:
+    """A 400 naming the body field whose reference could not be resolved."""
+    return ValidationFailed(
+        "Request validation failed.", details=[{"field": field, "message": message}]
+    )
 
 
 def _apply(row: Any, body: UpdateModel) -> None:
@@ -146,3 +160,95 @@ def delete_building(session: Session, principal: Principal, building_id: uuid.UU
     session.delete(building)
     _flush_or_conflict(session, "Building is still referenced; deactivate it instead.")
     _logger.info("building_deleted", extra={"building_id": str(building_id)})
+
+
+# --------------------------------------------------------------------------- floors
+
+_FLOOR_TAKEN = "This building already has a floor at this level."
+
+
+def _require_floor(
+    session: Session, principal: Principal, floor_id: uuid.UUID, *, for_update: bool = False
+) -> Floor:
+    """Load a floor the caller may see: one whose building is active, unless an admin."""
+    floor = repo.get_floor(
+        session, floor_id, include_inactive=principal.is_admin, for_update=for_update
+    )
+    if floor is None:
+        raise NotFound("Floor not found.")
+    return floor
+
+
+def list_floors(
+    session: Session, principal: Principal, building_id: uuid.UUID, filters: FloorFilters
+) -> tuple[list[Floor], int]:
+    """Page through a building's floors.
+
+    Raises:
+        NotFound: No such building, or it is retired and the caller is not an admin.
+    """
+    building = _require_building(session, principal, building_id)
+    return repo.list_floors(session, building.id, filters)
+
+
+def get_floor(session: Session, principal: Principal, floor_id: uuid.UUID) -> Floor:
+    """Fetch one floor.
+
+    Raises:
+        NotFound: No such floor, or its building is retired and the caller is not an admin.
+    """
+    return _require_floor(session, principal, floor_id)
+
+
+def create_floor(session: Session, body: FloorCreate) -> Floor:
+    """Add a floor to a building.
+
+    Raises:
+        ValidationFailed: The building does not exist.
+        Conflict: The building already has a floor at this level.
+    """
+    if repo.get_building(session, body.building_id, include_inactive=True) is None:
+        raise _missing("building_id", "Building does not exist.")
+    floor = Floor(building_id=body.building_id, level=body.level, name=body.name)
+    session.add(floor)
+    _flush_or_conflict(session, _FLOOR_TAKEN)
+    _logger.info("floor_created", extra={"floor_id": str(floor.id)})
+    return floor
+
+
+def update_floor(
+    session: Session, principal: Principal, floor_id: uuid.UUID, body: FloorUpdate
+) -> Floor:
+    """Apply an admin's edits to a floor. It cannot move to another building.
+
+    Raises:
+        NotFound: No such floor.
+        Conflict: The new level is already taken in this building.
+    """
+    floor = _require_floor(session, principal, floor_id, for_update=True)
+    _apply(floor, body)
+    _flush_or_conflict(session, _FLOOR_TAKEN)
+    return floor
+
+
+def delete_floor(session: Session, principal: Principal, floor_id: uuid.UUID) -> None:
+    """Delete a floor nothing depends on.
+
+    The seats foreign key cascades and the incidents one nulls the incident's
+    floor, so the database would refuse neither; this check is the only guard.
+
+    Raises:
+        NotFound: No such floor.
+        Conflict: It still has seats, or incidents still name it.
+    """
+    floor = _require_floor(session, principal, floor_id, for_update=True)
+    seats = repo.count_seats(session, floor.id)
+    incidents = repo.count_incidents_on_floor(session, floor.id)
+    if seats or incidents:
+        raise Conflict(
+            f"Floor has {_plural(seats, 'seat')} and {_plural(incidents, 'incident')}; "
+            "it cannot be deleted while either remains."
+        )
+    session.delete(floor)
+    _flush_or_conflict(session, "Floor is still referenced and cannot be deleted.")
+    _logger.info("floor_deleted", extra={"floor_id": str(floor_id)})

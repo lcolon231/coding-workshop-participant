@@ -28,6 +28,10 @@ from acme_core.schemas.facility import (
     BuildingFilters,
     BuildingOut,
     BuildingUpdate,
+    FloorCreate,
+    FloorFilters,
+    FloorOut,
+    FloorUpdate,
 )
 from facilities_service import service
 
@@ -119,4 +123,81 @@ def update_building(
 def delete_building(building_id: uuid.UUID, admin: AdminPrincipal, session: DbSession) -> Response:
     """Refused while the building has floors or incidents; deactivate it instead."""
     service.delete_building(session, admin, building_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# --------------------------------------------------------------------------- floors
+
+
+@router.get(
+    "/buildings/{building_id}/floors",
+    response_model=Page[FloorOut],
+    responses=error_responses(400, 401, 404),
+    tags=["floors"],
+    summary="A building's floors",
+)
+def list_floors(
+    building_id: uuid.UUID,
+    caller: CurrentPrincipal,
+    session: DbSession,
+    filters: Annotated[FloorFilters, Query()],
+) -> Page[FloorOut]:
+    """Floors of one building, lowest level first. A retired building is 404 to non-admins."""
+    rows, total = service.list_floors(session, caller, building_id, filters)
+    return _page(FloorOut, rows, total, filters)
+
+
+@router.post(
+    "/floors",
+    status_code=status.HTTP_201_CREATED,
+    response_model=FloorOut,
+    responses=error_responses(400, 401, 403, 409),
+    tags=["floors"],
+    summary="Create a floor",
+)
+def create_floor(
+    body: FloorCreate, _admin: AdminPrincipal, session: DbSession, response: Response
+) -> FloorOut:
+    """Add a floor. Levels are signed, so basements are negative."""
+    floor = service.create_floor(session, body)
+    response.headers["Location"] = f"{PREFIX}/floors/{floor.id}"
+    return FloorOut.model_validate(floor)
+
+
+@router.get(
+    "/floors/{floor_id}",
+    response_model=FloorOut,
+    responses=error_responses(401, 404),
+    tags=["floors"],
+    summary="One floor",
+)
+def get_floor(floor_id: uuid.UUID, caller: CurrentPrincipal, session: DbSession) -> FloorOut:
+    """A floor; those of a retired building are visible to admins only."""
+    return FloorOut.model_validate(service.get_floor(session, caller, floor_id))
+
+
+@router.put(
+    "/floors/{floor_id}",
+    response_model=FloorOut,
+    responses=error_responses(400, 401, 403, 404, 409),
+    tags=["floors"],
+    summary="Update a floor",
+)
+def update_floor(
+    floor_id: uuid.UUID, body: FloorUpdate, admin: AdminPrincipal, session: DbSession
+) -> FloorOut:
+    """Partial update of level or name. Moving a floor to another building is not supported."""
+    return FloorOut.model_validate(service.update_floor(session, admin, floor_id, body))
+
+
+@router.delete(
+    "/floors/{floor_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses=error_responses(401, 403, 404, 409),
+    tags=["floors"],
+    summary="Delete an empty floor",
+)
+def delete_floor(floor_id: uuid.UUID, admin: AdminPrincipal, session: DbSession) -> Response:
+    """Refused while the floor has seats or incidents name it."""
+    service.delete_floor(session, admin, floor_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
