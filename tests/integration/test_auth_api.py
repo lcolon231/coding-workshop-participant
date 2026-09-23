@@ -264,6 +264,45 @@ class TestRefresh:
 
 
 class TestMe:
+    def test_the_token_may_travel_in_x_acme_authorization(
+        self, auth_client: TestClient, make_user: Any, sign_in: Any
+    ) -> None:
+        """The header the browser sends: CloudFront overwrites `Authorization`."""
+        user = make_user()
+        token = sign_in(user.email)["access_token"]
+        resp = auth_client.get(f"{P}/me", headers={"X-Acme-Authorization": f"Bearer {token}"})
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["email"] == user.email
+
+    def test_x_acme_authorization_wins_over_the_edge_signature(
+        self, auth_client: TestClient, make_user: Any, sign_in: Any
+    ) -> None:
+        """What the Lambda actually receives through CloudFront: both headers."""
+        user = make_user()
+        token = sign_in(user.email)["access_token"]
+        edge_signature = (
+            "AWS4-HMAC-SHA256 Credential=AKIA/20260923/us-east-1/lambda/aws4_request, "
+            "SignedHeaders=host, Signature=abc"
+        )
+        resp = auth_client.get(
+            f"{P}/me",
+            headers={"Authorization": edge_signature, "X-Acme-Authorization": f"Bearer {token}"},
+        )
+        assert resp.status_code == 200, resp.text
+
+    @pytest.mark.parametrize("value", ["Basic abc", "Bearer", "Bearer ", "abc"])
+    def test_a_malformed_x_acme_authorization_is_refused(
+        self, auth_client: TestClient, make_user: Any, sign_in: Any, value: str
+    ) -> None:
+        """Present but not `Bearer <token>`: refused, never silently ignored."""
+        token = sign_in(make_user().email)["access_token"]
+        resp = auth_client.get(
+            f"{P}/me",
+            headers={"Authorization": f"Bearer {token}", "X-Acme-Authorization": value},
+        )
+        assert resp.status_code == 401, resp.text
+        assert resp.json()["message"] == "Authentication required."
+
     def test_returns_the_caller(
         self, auth_client: TestClient, make_user: Any, sign_in: Any
     ) -> None:

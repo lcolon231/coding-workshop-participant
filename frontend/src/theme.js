@@ -53,7 +53,9 @@ shadows[8] = `0 4px 12px ${accent(0.08)}, 0 16px 40px -16px ${accent(0.4)}`
 shadows[24] = `0 8px 24px ${accent(0.1)}, 0 32px 64px -24px ${accent(0.5)}`
 
 export const theme = createTheme({
-  cssVariables: true,
+  // A data attribute on <html> selects the scheme, so the toggle can override
+  // the system preference; index.html sets it before first paint.
+  cssVariables: { colorSchemeSelector: 'data' },
   colorSchemes: {
     light: {
       palette: {

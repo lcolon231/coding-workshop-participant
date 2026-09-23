@@ -21,6 +21,9 @@ const WOKE_MESSAGE =
 // or nothing answered at all. Any of them is what a paused database looks like.
 const WAKING_STATUSES = new Set([0, 500, 502, 503, 504])
 
+/** The header the access token travels in; see `send`. */
+export const AUTH_HEADER = 'X-Acme-Authorization'
+
 /** Whether this failure could be the database waking up rather than a real refusal. */
 export function isWakingError(err) {
   return err instanceof ApiError && WAKING_STATUSES.has(err.status)
@@ -102,7 +105,10 @@ async function send(path, { method = 'GET', body, token } = {}) {
     const hash = await payloadHash(payload)
     if (hash) headers['x-amz-content-sha256'] = hash
   }
-  if (token) headers.Authorization = `Bearer ${token}`
+  // Not `Authorization`: on AWS, CloudFront signs every origin request to the
+  // Lambda function URLs and overwrites that header with its own signature,
+  // so a token sent there never reaches the API. The API reads this one first.
+  if (token) headers[AUTH_HEADER] = `Bearer ${token}`
 
   let response
   try {
