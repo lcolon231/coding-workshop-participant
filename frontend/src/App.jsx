@@ -7,6 +7,7 @@ import Typography from '@mui/material/Typography'
 import { useAuth } from './auth/AuthContext'
 import RequireRole from './auth/RequireRole'
 import AppShell from './components/AppShell'
+import FacilitiesPage from './pages/FacilitiesPage'
 import IncidentPage from './pages/IncidentPage'
 import IncidentsPage from './pages/IncidentsPage'
 import LoginPage from './pages/LoginPage'
@@ -87,6 +88,14 @@ export default function App() {
           element={
             <RequireRole roles={ADMIN}>
               <UsersPage />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="facilities"
+          element={
+            <RequireRole roles={ADMIN}>
+              <FacilitiesPage />
             </RequireRole>
           }
         />
