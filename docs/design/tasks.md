@@ -15,12 +15,12 @@ are placed in the phase where they belong.
 | 0 | Tooling foundation | 6 / 6 |
 | 1 | `acme_core` shared kernel | 30 / 30 |
 | 2 | `auth` service | 16 / 16 |
-| 3 | `incidents` service | 16 / 17 |
-| 4 | `facilities` service | 9 / 10 |
+| 3 | `incidents` service | 17 / 17 |
+| 4 | `facilities` service | 10 / 10 |
 | 5 | Frontend | 22 / 25 |
 | 6 | Cloud, CI and operations | 3 / 14 |
 | 7 | Documentation and handover | 0 / 7 |
-| | **Total** | **80 / 123** |
+| | **Total** | **82 / 123** |
 
 ---
 
@@ -102,7 +102,7 @@ are placed in the phase where they belong.
 - [x] **T61** `test_scoping_db.py` — real rows, all three roles, the 404/200 pair on the **same** id. *(plus the same pair over HTTP in `TestGet`)*
 - [x] **T62** Transition integration tests — each legal edge end to end, plus history rows and stamp values. Includes the full **admin-triage journey**: employee reports → admin assigns while Open → the engineer (who could not see it before) now can, and starts work *(api.md §4)*. *(the five-step order of checks is pinned one test per step)*
 - [x] **T63** Filter/pagination tests incl. sort allowlist rejection.
-- [ ] **T64** Deploy and smoke-test the service.
+- [x] **T64** Deploy and smoke-test the service. *(2026-09-23: every route answers through CloudFront. Two findings, both fixed: the origin access control overwrote the bearer header (T123 note) and a cold environment took 12 s because the web stack was imported inside the invoke phase with no shipped bytecode; the import now runs at module scope, in the init phase, which gets a full CPU.)*
 - [x] **T125** In-app notifications — an engineer is told when an incident is assigned to them, every active admin when one is reported *(api.md I20–I22, D9)*. *(`notifications` table, migration `c49f04286e46`; rows written in the same transaction as the report or the assignment, by `PUT` and by transition alike, only on a real change of hands and never to the actor themselves; the recipient is the only reader, structurally, so another user's row is 404. `NotificationPage` carries `unread_count` so the badge and the list are one round trip. Frontend: `components/NotificationBell.jsx` in the app bar for staff only, polling once a minute while visible and on focus, a menu that phrases each row and marks it read on the way to the incident, "Mark all as read". 14 backend tests, 12 frontend tests)*
 
 ## Phase 4 — `facilities` service
@@ -116,7 +116,7 @@ are placed in the phase where they belong.
 - [x] **T71** Nested listings (`/buildings/{id}/floors`, `/floors/{id}/seats`). *(the parent's visibility is checked first; a retired parent is 404 to non-admins)*
 - [x] **T72** Referential-integrity handling — deleting a building with floors is 409, not 500. The FKs are `ON DELETE CASCADE`, so the service checks for children **before** deleting; tests assert the floors and seats **still exist** after the rejected delete, not only the status code. *(also `incidents.floor_id` and `seat_id` are `SET NULL`, so the database would not refuse those deletes either; the service counts incident references for every resource. Where the database does refuse, the delete is flushed inside a savepoint and the `IntegrityError` maps to the same 409; tests miss each pre-check on purpose to prove it)*
 - [x] **T73** Integration tests for all of the above. *(`test_facilities_api.py`, 118 tests, both roles, the 404/200 pair on one retired id per resource)*
-- [ ] **T74** Deploy and smoke-test.
+- [x] **T74** Deploy and smoke-test. *(2026-09-23: answers through CloudFront; same cold-start fix as T64.)*
 
 ## Phase 5 — Frontend
 

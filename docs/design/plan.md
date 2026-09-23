@@ -272,7 +272,7 @@ too. *Before committing to rsync, spend 10 minutes testing whether an absolute p
 `requirements.txt` lets `pip_requirements = true` do the vendoring — that would delete this whole
 bug class rather than detect it.*
 
-**A2 — Memory: the migrate path OOMs as designed.** `Mangum(app)` at module scope imports FastAPI +
+**A2 — Memory: the migrate path OOMs as designed.** *Reversed 2026-09-23 after the first deploy: the functions run at 512 MB now, and the lazy import cost every cold environment 12 s (45–60 s at 128 MB) compiling the web stack's source inside the invoke phase, which gets a fraction of a CPU, whereas the init phase gets a whole one. The web stack is imported at module scope again; only the `Mangum` adapter is built lazily, and Alembic is still imported by the admin branch alone.* Original note: `Mangum(app)` at module scope imports FastAPI +
 all routes + the model graph before the admin branch is reached, then lazily adds alembic — plausibly
 125–150 MB against a hard 128. **Fix:** build `_asgi` lazily *inside* `handler`, with
 `from mangum import Mangum` moved in too, so an admin invoke never imports the web stack:

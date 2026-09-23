@@ -73,10 +73,11 @@ class TestAdmin:
         assert function.handler(event, None) == {"ok": True}
         assert seen == [("db-current", {"x": 1})]
 
-    def test_an_admin_command_never_builds_the_web_stack(
+    def test_an_admin_command_never_builds_the_adapter(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """A2: migrate must not load FastAPI and the routes inside 128 MB."""
+        """The web stack is imported at module scope now (init-phase CPU), but
+        an admin invocation still constructs no ASGI adapter."""
         monkeypatch.setattr(admin_actions, "run_admin_action", lambda *_: {"ok": True})
         function.handler({"source": "acme.admin.v1", "action": "migrate"}, None)
         assert function._asgi is None
