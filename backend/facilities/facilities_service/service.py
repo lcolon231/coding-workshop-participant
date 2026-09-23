@@ -26,8 +26,10 @@ from sqlalchemy.orm import Session
 
 from acme_core.exceptions import Conflict, NotFound, ValidationFailed
 from acme_core.logging_config import get_logger
-from acme_core.models import Building, Category, Floor, Seat
+from acme_core.models import Building, Category, EngineerProfile, Floor, Seat
+from acme_core.schemas.auth import UserSummary
 from acme_core.schemas.common import UpdateModel
+from acme_core.schemas.engineer import EngineerFilters, EngineerOut, EngineerProfileUpdate
 from acme_core.schemas.facility import (
     BuildingCreate,
     BuildingFilters,
@@ -458,3 +460,59 @@ def delete_category(session: Session, principal: Principal, category_id: uuid.UU
     session.delete(category)
     _flush_or_conflict(session, "Category is still referenced; deactivate it instead.")
     _logger.info("category_deleted", extra={"category_id": str(category_id)})
+
+
+# --------------------------------------------------------------------------- engineers
+
+
+def _engineer_out(profile: EngineerProfile, counts: dict[uuid.UUID, int]) -> EngineerOut:
+    """Shape a profile, its user and its current load for the assignment picker."""
+    return EngineerOut(
+        user_id=profile.user_id,
+        specialty=profile.specialty,
+        max_concurrent_incidents=profile.max_concurrent_incidents,
+        is_available=profile.is_available,
+        user=UserSummary.model_validate(profile.user),
+        open_assignments=counts.get(profile.user_id, 0),
+    )
+
+
+def _require_engineer(
+    session: Session, user_id: uuid.UUID, *, for_update: bool = False
+) -> EngineerProfile:
+    """Load an active engineer's profile, or raise the answer any other user id gets."""
+    profile = repo.get_engineer(session, user_id, for_update=for_update)
+    if profile is None:
+        raise NotFound("Engineer not found.")
+    return profile
+
+
+def list_engineers(session: Session, filters: EngineerFilters) -> tuple[list[EngineerOut], int]:
+    """Page through active engineers with their user and open-assignment count."""
+    profiles, total = repo.list_engineers(session, filters)
+    counts = repo.open_assignments_for(session, (profile.user_id for profile in profiles))
+    return [_engineer_out(profile, counts) for profile in profiles], total
+
+
+def get_engineer(session: Session, user_id: uuid.UUID) -> EngineerOut:
+    """Fetch one engineer by user id.
+
+    Raises:
+        NotFound: No such user, or not an active Engineer.
+    """
+    profile = _require_engineer(session, user_id)
+    return _engineer_out(profile, repo.open_assignments_for(session, [profile.user_id]))
+
+
+def update_engineer(
+    session: Session, user_id: uuid.UUID, body: EngineerProfileUpdate
+) -> EngineerOut:
+    """Edit an engineer's scheduling data.
+
+    Raises:
+        NotFound: No such user, or not an active Engineer.
+    """
+    profile = _require_engineer(session, user_id, for_update=True)
+    _apply(profile, body)
+    session.flush()
+    return _engineer_out(profile, repo.open_assignments_for(session, [profile.user_id]))

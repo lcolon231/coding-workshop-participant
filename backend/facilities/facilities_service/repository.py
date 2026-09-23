@@ -19,10 +19,21 @@ from collections.abc import Iterable, Mapping
 from typing import Any
 
 from sqlalchemy import ColumnElement, Select, func, or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, contains_eager
 
-from acme_core.models import Building, Category, Floor, Incident, Seat
+from acme_core.models import (
+    Building,
+    Category,
+    EngineerProfile,
+    Floor,
+    Incident,
+    IncidentStatus,
+    Role,
+    Seat,
+    User,
+)
 from acme_core.pagination import like_pattern, paginate
+from acme_core.schemas.engineer import EngineerFilters
 from acme_core.schemas.facility import (
     BuildingFilters,
     CategoryFilters,
@@ -38,6 +49,32 @@ _BUILDING_SORTS: Mapping[str, ColumnElement[Any]] = {
 _FLOOR_SORTS: Mapping[str, ColumnElement[Any]] = {"level": Floor.level, "name": Floor.name}
 _SEAT_SORTS: Mapping[str, ColumnElement[Any]] = {"code": Seat.code, "label": Seat.label}
 _CATEGORY_SORTS: Mapping[str, ColumnElement[Any]] = {"name": Category.name}
+
+
+def _open_assignments() -> ColumnElement[Any]:
+    """Non-closed incidents assigned to the engineer of the enclosing row.
+
+    A correlated scalar subquery rather than a second select column: the
+    pager keeps only the first column of a statement, and this way the
+    count can also be sorted on inside the same statement.
+    """
+    return (
+        select(func.count())
+        .select_from(Incident)
+        .where(
+            Incident.assignee_id == EngineerProfile.user_id,
+            Incident.status != IncidentStatus.CLOSED,
+        )
+        .correlate(EngineerProfile)
+        .scalar_subquery()
+    )
+
+
+_ENGINEER_SORTS: Mapping[str, ColumnElement[Any]] = {
+    "full_name": User.full_name,
+    "specialty": EngineerProfile.specialty,
+    "open_assignments": _open_assignments(),
+}
 
 
 def _matches(columns: Iterable[ColumnElement[Any]], term: str) -> ColumnElement[bool]:
@@ -280,3 +317,64 @@ def count_children(session: Session, category_id: uuid.UUID) -> int:
 def count_incidents_in_category(session: Session, category_id: uuid.UUID) -> int:
     """How many incidents, in any status, carry this category."""
     return _count_incidents(session, Incident.category_id == category_id)
+
+
+# --------------------------------------------------------------------------- engineers
+
+
+def _engineers() -> Select[Any]:
+    """A select over the profiles of active users who hold the Engineer role.
+
+    The role is checked on the user, not inferred from the profile: a demoted
+    engineer keeps their profile row, and an inactive one cannot be assigned
+    work, so neither belongs in the assignment picker.
+    """
+    return (
+        select(EngineerProfile)
+        .join(User, EngineerProfile.user)
+        .options(contains_eager(EngineerProfile.user))
+        .where(User.role == Role.ENGINEER, User.is_active.is_(True))
+    )
+
+
+def list_engineers(session: Session, filters: EngineerFilters) -> tuple[list[EngineerProfile], int]:
+    """Page through engineers, each with their user loaded."""
+    statement = _engineers()
+    if filters.specialty is not None:
+        statement = statement.where(
+            func.lower(EngineerProfile.specialty) == filters.specialty.lower()
+        )
+    if filters.is_available is not None:
+        statement = statement.where(EngineerProfile.is_available.is_(filters.is_available))
+    return paginate(
+        session,
+        statement,
+        filters,
+        sort_columns=_ENGINEER_SORTS,
+        sort=filters.sort,
+        order=filters.order,
+        tiebreaker=EngineerProfile.user_id,
+    )
+
+
+def get_engineer(
+    session: Session, user_id: uuid.UUID, *, for_update: bool = False
+) -> EngineerProfile | None:
+    """Fetch one engineer's profile by user id, with the user loaded."""
+    statement = _engineers().where(EngineerProfile.user_id == user_id)
+    if for_update:
+        statement = statement.with_for_update(of=EngineerProfile)
+    return session.execute(statement).scalar_one_or_none()
+
+
+def open_assignments_for(session: Session, user_ids: Iterable[uuid.UUID]) -> dict[uuid.UUID, int]:
+    """Non-closed incidents per assignee, for one page of engineers in one query."""
+    ids = list(user_ids)
+    if not ids:
+        return {}
+    rows = session.execute(
+        select(Incident.assignee_id, func.count())
+        .where(Incident.assignee_id.in_(ids), Incident.status != IncidentStatus.CLOSED)
+        .group_by(Incident.assignee_id)
+    ).all()
+    return {assignee_id: total for assignee_id, total in rows}

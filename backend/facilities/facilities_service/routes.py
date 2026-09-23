@@ -23,6 +23,7 @@ from fastapi import APIRouter, Query, Response, status
 from acme_core.dependencies import AdminPrincipal, CurrentPrincipal, DbSession
 from acme_core.errors import error_responses
 from acme_core.schemas.common import Page, PageParams
+from acme_core.schemas.engineer import EngineerFilters, EngineerOut, EngineerProfileUpdate
 from acme_core.schemas.facility import (
     BuildingCreate,
     BuildingFilters,
@@ -362,3 +363,47 @@ def delete_category(category_id: uuid.UUID, admin: AdminPrincipal, session: DbSe
     """Refused while the category has children or incidents carry it."""
     service.delete_category(session, admin, category_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# --------------------------------------------------------------------------- engineers
+
+
+@router.get(
+    "/engineers",
+    response_model=Page[EngineerOut],
+    responses=error_responses(400, 401, 403),
+    tags=["engineers"],
+    summary="List engineers with their current load",
+)
+def list_engineers(
+    _admin: AdminPrincipal, session: DbSession, filters: Annotated[EngineerFilters, Query()]
+) -> Page[EngineerOut]:
+    """Active engineers, each with their user and open-assignment count, for assigning by load."""
+    items, total = service.list_engineers(session, filters)
+    return Page[EngineerOut](items=items, total=total, limit=filters.limit, offset=filters.offset)
+
+
+@router.get(
+    "/engineers/{user_id}",
+    response_model=EngineerOut,
+    responses=error_responses(401, 403, 404),
+    tags=["engineers"],
+    summary="One engineer",
+)
+def get_engineer(user_id: uuid.UUID, _admin: AdminPrincipal, session: DbSession) -> EngineerOut:
+    """An engineer's profile, keyed by user id. Any other kind of user is 404."""
+    return service.get_engineer(session, user_id)
+
+
+@router.put(
+    "/engineers/{user_id}",
+    response_model=EngineerOut,
+    responses=error_responses(400, 401, 403, 404),
+    tags=["engineers"],
+    summary="Update an engineer's scheduling data",
+)
+def update_engineer(
+    user_id: uuid.UUID, body: EngineerProfileUpdate, _admin: AdminPrincipal, session: DbSession
+) -> EngineerOut:
+    """Partial update of specialty, capacity or availability."""
+    return service.update_engineer(session, user_id, body)

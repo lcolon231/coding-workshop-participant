@@ -25,8 +25,10 @@ from sqlalchemy.orm import Session
 from acme_core.models import (
     Building,
     Category,
+    EngineerProfile,
     Floor,
     Incident,
+    IncidentStatus,
     Role,
     Seat,
     User,
@@ -206,7 +208,7 @@ def stored(session: Session, model: type, row_id: Any) -> Any:
 
 class TestRouteContract:
     PUBLIC = {("GET", f"{P}/healthz"), ("GET", f"{P}/readyz")}
-    PROTECTED_ROUTES = 20
+    PROTECTED_ROUTES = 23
 
     def test_every_other_route_rejects_an_anonymous_caller(
         self, facilities_client: TestClient
@@ -1184,3 +1186,165 @@ class TestCategoryDelete:
     ) -> None:
         resp = facilities_client.delete(f"{P}/categories/{uuid.uuid4()}", headers=actors.admin)
         assert resp.status_code == 404
+
+
+# --------------------------------------------------------------------------- engineers
+
+
+class TestEngineerList:
+    def test_lists_active_engineers_with_their_user_by_name(
+        self, facilities_client: TestClient, actors: Actors, world: World
+    ) -> None:
+        """Not the employee, not the demoted user with a stale profile, not the inactive one."""
+        page = facilities_client.get(f"{P}/engineers", headers=actors.admin).json()
+        assert page["total"] == 2
+        assert page["items"][0] == {
+            "user_id": str(world.engineer.id),
+            "specialty": "HVAC",
+            "max_concurrent_incidents": 5,
+            "is_available": True,
+            "user": {"id": str(world.engineer.id), "full_name": "Ada", "role": "Engineer"},
+            "open_assignments": 0,
+        }
+        assert page["items"][1]["user"]["full_name"] == "Bob"
+
+    def test_open_assignments_counts_non_closed_incidents_and_sorts_by_load(
+        self, facilities_client: TestClient, actors: Actors, world: World, make_incident: Any
+    ) -> None:
+        for status in (IncidentStatus.IN_PROGRESS, IncidentStatus.BLOCKED, IncidentStatus.CLOSED):
+            make_incident(assignee_id=world.engineer.id, status=status)
+        make_incident(assignee_id=world.other_engineer.id, status=IncidentStatus.RESOLVED)
+        busiest_first = facilities_client.get(
+            f"{P}/engineers",
+            params={"sort": "open_assignments", "order": "desc"},
+            headers=actors.admin,
+        ).json()
+        assert [
+            (e["user"]["full_name"], e["open_assignments"]) for e in busiest_first["items"]
+        ] == [
+            ("Ada", 2),
+            ("Bob", 1),
+        ]
+        freest_first = facilities_client.get(
+            f"{P}/engineers", params={"sort": "open_assignments"}, headers=actors.admin
+        ).json()
+        assert [e["user"]["full_name"] for e in freest_first["items"]] == ["Bob", "Ada"]
+
+    def test_filters_by_specialty_case_insensitively_and_by_availability(
+        self, facilities_client: TestClient, actors: Actors, world: World
+    ) -> None:
+        hvac = facilities_client.get(
+            f"{P}/engineers", params={"specialty": "hvac"}, headers=actors.admin
+        ).json()
+        assert ([e["user"]["full_name"] for e in hvac["items"]], hvac["total"]) == (["Ada"], 1)
+        nobody = facilities_client.get(
+            f"{P}/engineers", params={"specialty": "Masonry"}, headers=actors.admin
+        ).json()
+        assert (nobody["items"], nobody["total"]) == ([], 0)
+        facilities_client.put(
+            f"{P}/engineers/{world.engineer.id}", json={"is_available": False}, headers=actors.admin
+        )
+        available = facilities_client.get(
+            f"{P}/engineers", params={"is_available": "true"}, headers=actors.admin
+        ).json()
+        assert [e["user"]["full_name"] for e in available["items"]] == ["Bob"]
+
+    def test_sorts_by_specialty_and_pages(
+        self, facilities_client: TestClient, actors: Actors
+    ) -> None:
+        page = facilities_client.get(
+            f"{P}/engineers", params={"sort": "specialty", "limit": 1}, headers=actors.admin
+        ).json()
+        assert [e["specialty"] for e in page["items"]] == ["Electrical"]
+        assert (page["total"], page["limit"]) == (2, 1)
+
+    def test_only_admins_may_look(self, facilities_client: TestClient, actors: Actors) -> None:
+        for headers in (actors.employee, actors.engineer):
+            resp = facilities_client.get(f"{P}/engineers", headers=headers)
+            assert (resp.status_code, resp.json()["error"]) == (403, "forbidden")
+
+
+class TestEngineerGet:
+    def test_returns_the_profile_with_its_load(
+        self, facilities_client: TestClient, actors: Actors, world: World, make_incident: Any
+    ) -> None:
+        make_incident(assignee_id=world.other_engineer.id, status=IncidentStatus.IN_PROGRESS)
+        body = facilities_client.get(
+            f"{P}/engineers/{world.other_engineer.id}", headers=actors.admin
+        ).json()
+        assert (body["specialty"], body["open_assignments"]) == ("Electrical", 1)
+        assert body["user"]["full_name"] == "Bob"
+
+    @pytest.mark.parametrize("who", ["employee", "demoted", "inactive_engineer", "admin"])
+    def test_anyone_who_is_not_an_active_engineer_is_not_found(
+        self, facilities_client: TestClient, actors: Actors, world: World, who: str
+    ) -> None:
+        """Including the demoted user, whose profile row outlived their role."""
+        resp = facilities_client.get(
+            f"{P}/engineers/{getattr(world, who).id}", headers=actors.admin
+        )
+        assert (resp.status_code, resp.json()["error"]) == (404, "not_found")
+
+    def test_an_unknown_id_is_not_found(
+        self, facilities_client: TestClient, actors: Actors
+    ) -> None:
+        resp = facilities_client.get(f"{P}/engineers/{uuid.uuid4()}", headers=actors.admin)
+        assert resp.status_code == 404
+
+    def test_a_non_admin_is_refused(
+        self, facilities_client: TestClient, actors: Actors, world: World
+    ) -> None:
+        resp = facilities_client.get(f"{P}/engineers/{world.engineer.id}", headers=actors.engineer)
+        assert resp.status_code == 403
+
+
+class TestEngineerUpdate:
+    def test_edits_the_scheduling_fields(
+        self, facilities_client: TestClient, actors: Actors, world: World, verify_session: Session
+    ) -> None:
+        resp = facilities_client.put(
+            f"{P}/engineers/{world.engineer.id}",
+            json={"specialty": "Plumbing", "max_concurrent_incidents": 3, "is_available": False},
+            headers=actors.admin,
+        )
+        assert resp.status_code == 200, resp.text
+        assert (resp.json()["specialty"], resp.json()["max_concurrent_incidents"]) == (
+            "Plumbing",
+            3,
+        )
+        row = verify_session.execute(
+            select(EngineerProfile).where(EngineerProfile.user_id == world.engineer.id)
+        ).scalar_one()
+        verify_session.refresh(row)
+        assert (row.specialty, row.max_concurrent_incidents, row.is_available) == (
+            "Plumbing",
+            3,
+            False,
+        )
+
+    @pytest.mark.parametrize(
+        "body", [{"max_concurrent_incidents": 0}, {"specialty": None}, {"user_id": NIL}]
+    )
+    def test_rejects_zero_capacity_nulls_and_unknown_fields(
+        self, facilities_client: TestClient, actors: Actors, world: World, body: dict[str, Any]
+    ) -> None:
+        resp = facilities_client.put(
+            f"{P}/engineers/{world.engineer.id}", json=body, headers=actors.admin
+        )
+        assert (resp.status_code, resp.json()["error"]) == (400, "validation_error")
+
+    def test_a_demoted_user_cannot_be_edited_here(
+        self, facilities_client: TestClient, actors: Actors, world: World
+    ) -> None:
+        resp = facilities_client.put(
+            f"{P}/engineers/{world.demoted.id}", json={"is_available": False}, headers=actors.admin
+        )
+        assert resp.status_code == 404
+
+    def test_a_non_admin_is_refused_before_the_lookup(
+        self, facilities_client: TestClient, actors: Actors
+    ) -> None:
+        resp = facilities_client.put(
+            f"{P}/engineers/{uuid.uuid4()}", json={"is_available": False}, headers=actors.engineer
+        )
+        assert resp.status_code == 403
