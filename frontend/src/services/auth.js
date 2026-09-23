@@ -30,3 +30,22 @@ export function logout(refreshToken) {
 export function listUsers(params = {}) {
   return authedRequest(withQuery('/api/auth/users', params))
 }
+
+/** Admin only: the one place a role is chosen. Duplicate email is a 409. */
+export function createUser(body) {
+  return authedRequest('/api/auth/users', { method: 'POST', body })
+}
+
+export function getUser(id) {
+  return authedRequest(`/api/auth/users/${id}`)
+}
+
+/** Admin only, partial. A role change or deactivation ends the target's sessions. */
+export function updateUser(id, changes) {
+  return authedRequest(`/api/auth/users/${id}`, { method: 'PUT', body: changes })
+}
+
+/** Admin only. A soft delete: the account is deactivated, never removed. */
+export function deactivateUser(id) {
+  return authedRequest(`/api/auth/users/${id}`, { method: 'DELETE' })
+}

@@ -69,10 +69,10 @@
   <div class="frame">
     <p class="eyebrow">Security model · trust boundaries and admin path · ACME Facility Incident Management</p>
     <h1>Trust boundaries, admin path and supply-chain controls</h1>
-    <p class="subtitle">CloudFront is a router, not a boundary: the Function URL is publicly reachable, so every check lives in the process. Admin commands arrive by synchronous Lambda invoke and must match exactly or the invocation is refused. Controls S1–S12 refer to docs/design/plan.md; the per-request chain is drawn in security-auth-chain.html.</p>
+    <p class="subtitle">CloudFront is the only way in: it signs every origin request and the IAM-protected Function URL accepts nothing else. It routes, it does not authorise, so every check still lives in the process. Admin commands arrive by synchronous Lambda invoke and must match exactly or the invocation is refused. Controls S1–S12 refer to docs/design/plan.md; the per-request chain is drawn in security-auth-chain.html.</p>
     <svg viewBox="0 0 1440 952" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="security-boundaries-title security-boundaries-desc">
       <title id="security-boundaries-title">Trust boundaries, admin path and supply-chain controls</title>
-      <desc id="security-boundaries-desc">Security architecture diagram showing the browser reaching the Lambda runtime through CloudFront or directly through the public Function URL, all authorization enforced inside the runtime, the operator's admin invocation gated by a positive-match classifier, and the CI and dependency controls.</desc>
+      <desc id="security-boundaries-desc">Security architecture diagram showing the browser reaching the Lambda runtime only through CloudFront, which alone may invoke the IAM-protected Function URL, all authorization enforced inside the runtime, the operator's admin invocation gated by a positive-match classifier, and the CI and dependency controls.</desc>
       <defs>
         <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
         <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/></marker>
@@ -84,8 +84,8 @@
         <rect x="52" y="84" width="88" height="12" rx="2" fill="#f5f5f5"/>
         <text x="96" y="93" fill="rgba(45,49,66,0.40)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">PUBLIC INTERNET</text>
         <rect x="360" y="80" width="540" height="220" rx="8" fill="rgba(235,108,54,0.03)" stroke="rgba(235,108,54,0.45)" stroke-width="0.8"/>
-        <rect x="372" y="84" width="344" height="12" rx="2" fill="#f5f5f5"/>
-        <text x="544" y="93" fill="#eb6c36" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">AWS EDGE AND INGRESS · PUBLICLY REACHABLE · NOT A SECURITY BOUNDARY</text>
+        <rect x="372" y="84" width="411" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="544" y="93" fill="#eb6c36" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">AWS EDGE AND INGRESS · CLOUDFRONT IS THE ONLY ENTRY · AUTHZ STILL IN THE RUNTIME</text>
         <rect x="920" y="80" width="480" height="620" rx="8" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
         <rect x="932" y="84" width="352" height="12" rx="2" fill="#f5f5f5"/>
         <text x="1108" y="93" fill="rgba(45,49,66,0.40)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">PRIVATE RUNTIME · LAMBDA / UVICORN PROCESS · ALL AUTHZ ENFORCED HERE</text>
@@ -96,7 +96,6 @@
         <path d="M 600,184 L 660,184" fill="none" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
         <path d="M 860,184 L 960,184" fill="none" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
         <path d="M 1160,228 L 1160,300" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
-        <path d="M 200,228 V 252 Q 200,260 208,260 H 752 Q 760,260 760,252 V 228" fill="none" stroke="#2e5aa8" stroke-width="1.0" stroke-dasharray="4,3" marker-end="url(#arrow-link)"/>
         <path d="M 272,484 L 940,484" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
         <path d="M 1128,484 L 1180,484" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
         <path d="M 1280,440 L 1280,404" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
@@ -109,8 +108,6 @@
         <text x="910" y="175" fill="#2e5aa8" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">HTTP EVENT</text>
         <rect x="1168" y="258" width="128" height="12" rx="2" fill="#f5f5f5"/>
         <text x="1232" y="267" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">SQL · SSLMODE=REQUIRE</text>
-        <rect x="340" y="272" width="280" height="12" rx="2" fill="#f5f5f5"/>
-        <text x="480" y="281" fill="#2e5aa8" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">DIRECT · PUBLICLY REACHABLE · BYPASSES CLOUDFRONT</text>
         <rect x="416" y="466" width="380" height="12" rx="2" fill="#f5f5f5"/>
         <text x="606" y="475" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">AWS LAMBDA INVOKE · SOURCE=ACME.ADMIN.V1 · IAM LAMBDA:INVOKEFUNCTION</text>
         <rect x="1134" y="466" width="40" height="12" rx="2" fill="#f5f5f5"/>
@@ -141,15 +138,15 @@
         <text x="424" y="155" fill="#7a8399" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">EDGE</text>
         <text x="500" y="181" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">CloudFront edge</text>
         <text x="500" y="195" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">TLS only, path routing</text>
-        <text x="500" y="208" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">NOT a security boundary</text>
+        <text x="500" y="208" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">signs origin requests (OAC)</text>
         <rect x="660" y="140" width="200" height="88" rx="6" fill="#f5f5f5"/>
         <rect x="660" y="140" width="200" height="88" rx="6" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/>
         <rect x="668" y="146" width="44" height="12" rx="2" fill="transparent" stroke="rgba(235,108,54,0.50)" stroke-width="0.8"/>
         <text x="690" y="155" fill="#eb6c36" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">INGRESS</text>
         <text x="760" y="174" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Lambda Function URL</text>
-        <text x="760" y="188" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">auth NONE</text>
-        <text x="760" y="202" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">publicly reachable</text>
-        <text x="760" y="214" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">bypasses CloudFront</text>
+        <text x="760" y="188" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">auth AWS_IAM</text>
+        <text x="760" y="202" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">CloudFront only</text>
+        <text x="760" y="214" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">not reachable directly</text>
         <rect x="960" y="140" width="400" height="88" rx="6" fill="#f5f5f5"/>
         <rect x="960" y="140" width="400" height="88" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
         <rect x="968" y="146" width="44" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
@@ -224,10 +221,8 @@
         <text x="759.4000000000001" y="925" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Refused</text>
 <path d="M 819.1000000000001,921 L 847.1000000000001,921" fill="none" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
         <text x="855.1000000000001" y="925" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Permitted ingress</text>
-<path d="M 965.8000000000002,921 L 993.8000000000002,921" fill="none" stroke="#2e5aa8" stroke-width="1.0" stroke-dasharray="4,3" marker-end="url(#arrow-link)"/>
-        <text x="1001.8000000000002" y="925" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Unguarded bypass (authz still at runtime)</text>
-<path d="M 1234.9,921 L 1262.9,921" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
-        <text x="1270.9" y="925" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Admin invocation</text>
+<path d="M 965.8,921 L 993.8,921" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <text x="1001.8" y="925" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Admin invocation</text>
 
     </svg>
     <p class="colophon">Redrawn from docs/design/diagrams with the diagram-design skill · default editorial skin · Security model</p>

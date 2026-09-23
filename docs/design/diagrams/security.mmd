@@ -14,8 +14,8 @@ flowchart TB
     subgraph Boundaries["Trust boundaries"]
         direction LR
         Browser["Browser<br/>tokens in sessionStorage<br/>same-origin, no CORS middleware"]
-        Edge["CloudFront edge<br/>TLS only, path routing<br/>NOT a security boundary"]
-        FURL["Lambda Function URL<br/>auth NONE, publicly reachable<br/>bypasses CloudFront"]
+        Edge["CloudFront edge<br/>TLS only, path routing<br/>sole entry: signs origin requests (OAC)"]
+        FURL["Lambda Function URL<br/>auth AWS_IAM: CloudFront only<br/>not reachable directly"]
         Fn["Lambda / uvicorn process<br/>all authz enforced here"]
         DB[("Aurora PostgreSQL<br/>not publicly accessible, encrypted<br/>sslmode=require<br/>password is a 3-word pet name: never a KDF input")]
         Browser --> Edge --> FURL --> Fn --> DB

@@ -25,6 +25,22 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Hex SHA-256 of a request body.
+ *
+ * On AWS the API sits behind CloudFront, which signs each origin request to
+ * the Lambda function URLs (SigV4). Lambda rejects unsigned payloads, so a
+ * request with a body must carry the body's own hash in `x-amz-content-sha256`.
+ * Returns null where Web Crypto is unavailable (an insecure HTTP origin, which
+ * only happens under LocalStack, where there is no CloudFront to satisfy).
+ */
+export async function payloadHash(text) {
+  const subtle = globalThis.crypto?.subtle
+  if (!subtle) return null
+  const digest = await subtle.digest('SHA-256', new TextEncoder().encode(text))
+  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('')
+}
+
 /** Serialise query parameters, dropping empty ones. */
 export function withQuery(path, params = {}) {
   const query = new URLSearchParams()
@@ -44,16 +60,17 @@ export function withQuery(path, params = {}) {
  */
 export async function request(path, { method = 'GET', body, token } = {}) {
   const headers = { Accept: 'application/json' }
-  if (body !== undefined) headers['Content-Type'] = 'application/json'
+  const payload = body === undefined ? undefined : JSON.stringify(body)
+  if (payload !== undefined) {
+    headers['Content-Type'] = 'application/json'
+    const hash = await payloadHash(payload)
+    if (hash) headers['x-amz-content-sha256'] = hash
+  }
   if (token) headers.Authorization = `Bearer ${token}`
 
   let response
   try {
-    response = await fetch(path, {
-      method,
-      headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
-    })
+    response = await fetch(path, { method, headers, body: payload })
   } catch {
     throw new ApiError({ status: 0, error: 'network_error', message: NETWORK_MESSAGE })
   }

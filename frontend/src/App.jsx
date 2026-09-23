@@ -5,12 +5,16 @@ import Skeleton from '@mui/material/Skeleton'
 import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
 import { useAuth } from './auth/AuthContext'
+import RequireRole from './auth/RequireRole'
 import AppShell from './components/AppShell'
 import IncidentPage from './pages/IncidentPage'
 import IncidentsPage from './pages/IncidentsPage'
 import LoginPage from './pages/LoginPage'
 import NewIncidentPage from './pages/NewIncidentPage'
 import RegisterPage from './pages/RegisterPage'
+import UsersPage from './pages/UsersPage'
+
+const ADMIN = ['Facility Admin']
 
 /**
  * Gate everything behind a loaded user.
@@ -78,6 +82,14 @@ export default function App() {
         <Route path="incidents" element={<Navigate to="/" replace />} />
         <Route path="incidents/new" element={<NewIncidentPage />} />
         <Route path="incidents/:incidentId" element={<IncidentPage />} />
+        <Route
+          path="users"
+          element={
+            <RequireRole roles={ADMIN}>
+              <UsersPage />
+            </RequireRole>
+          }
+        />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

@@ -1,5 +1,19 @@
 locals {
-  app_id = try(trimspace(var.aws_app_code), "") != "" ? trimspace(var.aws_app_code) : random_id.this.hex
+  # LocalStack reports the all-zero account id. Several controls below are
+  # relaxed only on that path, never on a real account.
+  is_local = data.aws_caller_identity.this.id == "000000000000"
+  # Browsers call the function URLs directly only under LocalStack. On AWS the
+  # frontend and the API share the CloudFront origin, so no CORS is needed and
+  # the URLs are not browser-reachable at all (see lambda.tf).
+  lambda_cors_local = {
+    allow_credentials = false
+    allow_headers     = ["*"]
+    allow_methods     = ["*"]
+    allow_origins     = ["*"]
+    expose_headers    = []
+    max_age           = 0
+  }
+  app_id   = try(trimspace(var.aws_app_code), "") != "" ? trimspace(var.aws_app_code) : random_id.this.hex
   app_tags = { participant = local.app_id, event = random_id.this.hex }
   public_route_table_ids = [
     for rt in data.aws_route_table.this :

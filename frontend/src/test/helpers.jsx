@@ -42,6 +42,9 @@ export function renderSignedIn(element, { path, initialEntries = [path], user = 
             <Route path="/" element={<p>Home stub</p>} />
             <Route path="/incidents/new" element={<p>New incident stub</p>} />
             <Route path="/incidents/:id" element={<p>Detail stub</p>} />
+            <Route path="/users" element={<p>Users stub</p>} />
+            <Route path="/facilities" element={<p>Facilities stub</p>} />
+            <Route path="/reports" element={<p>Reports stub</p>} />
             <Route path="/login" element={<LoginStub />} />
           </Routes>
         </MemoryRouter>
@@ -95,6 +98,21 @@ export function signIn() {
     'acme.session',
     JSON.stringify({ accessToken: 'access-1', refreshToken: 'refresh-1', expiresAt: Date.now() + 1e6 }),
   )
+}
+
+/** A `UserOut` row as the admin list returns it. */
+export function userFixture(overrides = {}) {
+  return {
+    id: 'u-emp',
+    email: 'employee@acme.inc',
+    full_name: 'Eve Employee',
+    role: 'Employee',
+    occupation: 'Financial Analyst',
+    date_of_birth: '1995-01-30',
+    is_active: true,
+    created_at: '2026-09-01T09:00:00Z',
+    ...overrides,
+  }
 }
 
 export function incidentFixture(overrides = {}) {

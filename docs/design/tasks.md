@@ -18,9 +18,9 @@ are placed in the phase where they belong.
 | 3 | `incidents` service | 15 / 16 |
 | 4 | `facilities` service | 9 / 10 |
 | 5 | Frontend | 10 / 24 |
-| 6 | Cloud, CI and operations | 3 / 13 |
+| 6 | Cloud, CI and operations | 3 / 14 |
 | 7 | Documentation and handover | 0 / 7 |
-| | **Total** | **68 / 121** |
+| | **Total** | **68 / 122** |
 
 ---
 
@@ -160,6 +160,7 @@ Currently one line of work is allocated. **Roughly 2.5 of the rubric's 5 compete
 - [x] **T108** CI frontend job — lint plus Vitest. *(`.github/workflows/react.tests.yml`: Node 24, `npm ci` cached on the lockfile, lint → test → `test:coverage`, `frontend-coverage` artifact kept 14 days; no threshold yet, 84.77% statements measured for T96)*
 - [x] **T109** Raise the coverage ratchet to its final value once all services exist. *(decided 2026-09-22: the final value is the current 98. Measured 99.8% with all three services against a rubric goal of 80%, so the gate already over-delivers and the time goes to deploy day instead)*
 - [ ] **T110** Re-verify `./bin/cleanup-environment.sh` still works against everything deployed.
+- [~] **T123** Function URLs require IAM on AWS. An origin access control of type `lambda` makes CloudFront sign every origin request with SigV4; `lambda:InvokeFunctionUrl` and `lambda:InvokeFunction` are granted to this distribution and nothing else; the URL-level CORS block applies only under LocalStack, where the browser calls the URLs directly. The API client sends `x-amz-content-sha256` with every request body, because Lambda refuses a signed request whose payload hash is missing. *(Terraform validates and the client tests pass; the diagrams are updated; unverified until the first deploy, T99. Closes the "Function URL is public" accepted gap.)*
 - [ ] **T122** Load test on deploy day, **if time allows**: one Artillery run against the deployed login and incident-list endpoints at modest concurrency; record p95, error rate and any connection errors in NOTES.md next to the cold-start and memory numbers. Expected finding: `pool_size=1` per Lambda with no `reserved_concurrent_executions` (plan known-gaps table) — state the limit rather than fix it. *(rubric "Performance Testing"; not a coverage item)*
 
 ## Phase 7 — Documentation and handover
@@ -169,7 +170,7 @@ Currently one line of work is allocated. **Roughly 2.5 of the rubric's 5 compete
 - [ ] **T113** Document that `make serve` supersedes `bin/start-dev.sh`, and why *(the rubric scores "runs locally from documented commands")*.
 - [ ] **T114** API reference — link the live `/api/auth/docs`, plus an endpoint table.
 - [ ] **T115** Test-artifacts section — commands, results, and known gaps per tier *(rubric bullet, explicitly).*
-- [ ] **T116** Security notes — the pet-name password finding, the public Function URL, `@acme.inc` as validation not authentication, the IAM caveat.
+- [ ] **T116** Security notes — the pet-name password finding, the Function URL (IAM-only behind CloudFront since T123; still no edge control is an authorization boundary), `@acme.inc` as validation not authentication, the IAM caveat.
 - [ ] **T117** Demo script — the exact sequence to run in front of a reviewer, including the warm-up invoke.
 
 ---
@@ -196,7 +197,6 @@ Real limitations, recorded rather than silently carried. Each belongs in NOTES.m
 | Burst connection exhaustion | Needs `reserved_concurrent_executions` — a Terraform change, which is out of scope. |
 | CloudFront rewrites API 404s to `200 index.html` | Distribution-level `custom_error_response`; handled on the client instead. |
 | First cloud request may 504 | Aurora resume can exceed CloudFront's 30 s origin timeout. Mitigated by a warm-up, not fixed. |
-| Function URL is public and bypasses CloudFront | `authorization_type = "NONE"` is set in Terraform. No edge control is a security boundary. |
 | `@acme.inc` is validation, not authentication | No email verification. Anyone may assert an address they do not control. |
 | Session credentials expire | `ENVIRONMENT.config` holds STS tokens; cloud work needs `./bin/setup-participant.sh` re-run. |
 | `bin/start-dev.sh` is unused | It hard-exits without LocalStack. `make serve` replaces it; documented in T113. |

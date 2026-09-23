@@ -19,6 +19,40 @@ describe('request', () => {
     expect(init.body).toBe('{"a":1}')
   })
 
+  it('hashes the body for CloudFront-signed origin requests', async () => {
+    const fetch = vi.fn().mockResolvedValue(jsonResponse(200, {}))
+    vi.stubGlobal('fetch', fetch)
+
+    await request('/api/x', { method: 'POST', body: { a: 1 } })
+    const [, init] = fetch.mock.calls[0]
+    // sha256('{"a":1}')
+    expect(init.headers['x-amz-content-sha256']).toBe(
+      '015abd7f5cc57a2dd94b7590f04ad8084273905ee33ec5cebeae62276a97f862',
+    )
+  })
+
+  it('sends no payload hash without a body', async () => {
+    const fetch = vi.fn().mockResolvedValue(jsonResponse(200, {}))
+    vi.stubGlobal('fetch', fetch)
+
+    await request('/api/x')
+    const [, init] = fetch.mock.calls[0]
+    expect(init.headers).not.toHaveProperty('x-amz-content-sha256')
+    expect(init.body).toBeUndefined()
+  })
+
+  it('still sends the request where Web Crypto is unavailable', async () => {
+    // An insecure HTTP origin (LocalStack) exposes no crypto.subtle.
+    vi.stubGlobal('crypto', {})
+    const fetch = vi.fn().mockResolvedValue(jsonResponse(200, {}))
+    vi.stubGlobal('fetch', fetch)
+
+    await request('/api/x', { method: 'POST', body: { a: 1 } })
+    const [, init] = fetch.mock.calls[0]
+    expect(init.headers).not.toHaveProperty('x-amz-content-sha256')
+    expect(init.body).toBe('{"a":1}')
+  })
+
   it('resolves null on 204', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 204 })))
     await expect(request('/api/x', { method: 'DELETE' })).resolves.toBeNull()
