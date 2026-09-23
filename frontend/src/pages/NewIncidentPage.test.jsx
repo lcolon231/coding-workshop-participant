@@ -69,7 +69,7 @@ describe('NewIncidentPage', () => {
     expect(seat).toBeDisabled()
   })
 
-  it('submits the report and opens the new incident', async () => {
+  it('submits the report and returns to the incidents list', async () => {
     const fetch = stubApi([
       ...facilities(),
       ['POST', '/api/incidents', ({ body }) => jsonResponse(201, incidentFixture({ id: 'inc-9', ...body }))],
@@ -85,7 +85,7 @@ describe('NewIncidentPage', () => {
     await userEvent.selectOptions(screen.getByLabelText('Floor'), await screen.findByRole('option', { name: 'Level 3' }))
     await userEvent.click(screen.getByRole('button', { name: 'Submit report' }))
 
-    expect(await screen.findByText('Detail stub')).toBeInTheDocument()
+    expect(await screen.findByText('Home stub')).toBeInTheDocument()
     const post = fetch.mock.calls.find(([, init]) => init?.method === 'POST')
     expect(JSON.parse(post[1].body)).toEqual({
       title: 'Aircon dripping',

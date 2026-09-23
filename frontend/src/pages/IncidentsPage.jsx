@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link as RouterLink, useSearchParams } from 'react-router-dom'
+import { Link as RouterLink, useLocation, useSearchParams } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Checkbox from '@mui/material/Checkbox'
@@ -196,6 +196,7 @@ export default function IncidentsPage() {
   // One layout at a time: the table above `md`, stacked rows below it.
   const wide = useWide()
   const [searchParams, setSearchParams] = useSearchParams()
+  const location = useLocation()
   const filters = useMemo(() => readFilters(searchParams), [searchParams])
   // The draft is tied to the URL value it was typed over, so a URL change
   // (back button, "Clear filters") replaces it instead of fighting it.
@@ -206,7 +207,8 @@ export default function IncidentsPage() {
   const key = `${searchParams.toString()}#${attempt}`
   const [result, setResult] = useState({ key: null, page: null, error: null })
   const [exporting, setExporting] = useState(false)
-  const [notice, setNotice] = useState(null)
+  // A page that sends someone here after a mutation passes its confirmation in.
+  const [notice, setNotice] = useState(location.state?.notice ?? null)
   const admin = isAdmin(user)
 
   const update = useCallback(
