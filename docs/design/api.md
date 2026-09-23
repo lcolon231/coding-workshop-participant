@@ -58,7 +58,7 @@ These four are omitted from the per-service tables below.
 | Short | Role value | Summary |
 |---|---|---|
 | **EMP** | `Employee` | Reports incidents; sees only their own. Default for self-registration. |
-| **ENG** | `Engineer` | Works incidents; sees those assigned to them or reported by them. |
+| **ENG** | `Engineer` | Works incidents; sees only those assigned to them by an admin. |
 | **ADM** | `Facility Admin` | Sees and manages everything, including users and facilities. |
 | **ANY** | — | Any authenticated user. |
 
@@ -417,9 +417,11 @@ than a match.
 
 ### How work actually flows (read this before I1–I6)
 
-Scoping hides unassigned incidents from engineers (`test_an_engineer_does_not_see_unassigned_work`),
-so the `Open → In Progress` edge's `any_engineer` actor is, in practice, reachable only by an
-engineer an admin has **already assigned**. The flow is therefore **admin triage**, matching the
+Scoping shows an engineer nothing but the incidents assigned to them
+(`test_an_engineer_does_not_see_unassigned_work`, `test_an_engineer_does_not_see_incidents_they_reported`),
+and the `Open → In Progress` edge is open to an `assigned_engineer` only. Assignment itself is an
+admin's act: an engineer may not name an assignee on any transition, themselves included
+(`test_5_an_engineer_may_not_assign_anyone`). The flow is therefore **admin triage**, matching the
 brief ("facility admins assign work"):
 
 1. Employee reports → `Open`, unassigned.
@@ -457,7 +459,7 @@ description, ≤200 chars). `sort ∈ {created_at, priority, status, title}`, de
 
 Every filter is applied **inside** the scope, so no filter can widen it — an employee passing
 `assignee_id` of some engineer still sees only their own incidents. `total` goes through the same
-helper. An engineer's "my work" view is `?assignee_id=<own id>`.
+helper. An engineer's whole view is already their work; `?assignee_id=<own id>` is a no-op for them.
 
 ### I3 `GET /api/incidents/{incident_id}`
 
@@ -513,7 +515,7 @@ Order of checks, each with its own error, pinned by tests (plan, *Decisions clos
 | 2. Edge exists (`current → target`) | `409 invalid_transition` — includes everything out of `Closed` |
 | 3. Caller holds an allowed actor | `403 forbidden` |
 | 4. Required fields present, non-blank | `400 validation_error` with field details |
-| 5. `assignee_id`, if given, is an active Engineer; an **engineer may only assign themselves** | `400` / `403` |
+| 5. `assignee_id`, if given, is named by an **admin** and is an active Engineer | `403` / `400` |
 
 On success, in one transaction: apply the payload, write stamps from `stamps_for` (first-occurrence
 for `acknowledged_at`/`assigned_at`, latest for `resolved_at`/`closed_at`), and append a history row
@@ -603,9 +605,8 @@ Two events produce one:
 - **`Reported`** — `POST /api/incidents` (I1) writes one row per **active Facility Admin**, except
   the reporter when they are an admin themselves.
 - **`Assigned`** — a change of hands through `PUT` (I4) or a transition carrying `assignee_id` (I6)
-  writes one row for the **new** assignee. Re-saving the same assignee says nothing new, and an
-  engineer who names themselves is not told what they just did. A refused assignment (inactive
-  engineer, 400) leaves no row, because the whole request rolls back.
+  writes one row for the **new** assignee. Re-saving the same assignee says nothing new. A refused
+  assignment (inactive engineer, 400) leaves no row, because the whole request rolls back.
 
 The recipient is the only reader. Every query filters on the caller's id before anything else, so
 someone else's notification is `404`, never `403` (§1.5). `NotificationOut` carries the kind, the
@@ -641,8 +642,8 @@ What each role may do, at a glance. "own" = reported by the caller; "assigned" =
 | Read facilities & categories (active) | ✓ | ✓ | ✓ |
 | Write facilities & categories, manage engineer profiles | | | ✓ |
 | Report an incident | ✓ | ✓ | ✓ |
-| See incidents | own | own + assigned | all |
-| Edit title / description / category | own, while Open | own, while Open | ✓ |
+| See incidents | own | assigned | all |
+| Edit title / description / category | own, while Open | | ✓ |
 | Change priority or assignee | | | ✓ |
 | Delete an incident | | | ✓ |
 | Transition | per workflow (reporter edges) | per workflow | per workflow (admin bypass, never creates an edge) |
@@ -710,7 +711,7 @@ resolves them from a cached lookup instead of every incident row repeating build
 | D3 | Password change endpoint (A7) | Add it; S7 already assumes one exists | Leave out; admin reset only |
 | D4 | `refresh_token_reused` status | **Done: `401`.** `plan.md` contradicted itself and the code had 409. The client's refresh interceptor now needs one rule: any 401 from `/refresh` → sign out | — |
 | D5 | Admin-created users domain | Enforce `@acme.inc` too | Allow any domain for contractors |
-| D6 | Engineer visibility of unassigned work | Keep admin triage; do not widen scoping | Add a pick-up queue |
+| D6 | Engineer visibility of unassigned work | Keep admin triage; do not widen scoping. **Tightened 2026-09-23:** engineers see assigned work only (not their own reports) and cannot assign, even to themselves | Add a pick-up queue |
 | D7 | Priority at creation | Reporter may set it; only admin changes it later | Force `Medium` |
 | D8 | SLA targets | 4 h / 24 h / 3 d / 7 d constants | Configurable per category (needs a table) |
 | D9 | Notification delivery | In-app rows, polled once a minute | Email (no sender configured) or WebSockets (needs API Gateway) |

@@ -41,11 +41,10 @@ class TestIncidentScoping:
         assert "reporter_id" in statement
         assert "assignee_id" not in statement
 
-    def test_engineer_filters_on_assignee_or_reporter(self) -> None:
+    def test_engineer_filters_on_assignee_only(self) -> None:
         statement = sql(scope_incidents(select(Incident.id), principal(Role.ENGINEER)))
         assert "assignee_id" in statement
-        assert "reporter_id" in statement
-        assert " OR " in statement
+        assert "reporter_id" not in statement
 
     def test_returns_a_new_statement(self) -> None:
         """Generative, so a caller cannot mutate the original by accident."""

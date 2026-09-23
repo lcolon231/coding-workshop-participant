@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import Any, TypeVar
 
-from sqlalchemy import Select, or_
+from sqlalchemy import Select
 
 from acme_core.exceptions import Forbidden
 from acme_core.models.enums import NoteVisibility, Role
@@ -33,8 +33,9 @@ def scope_incidents(
 ) -> _S:
     """Narrow an incidents query to the rows this caller may see.
 
-    Employees see what they reported. Engineers additionally see what is
-    assigned to them. Facility Admins see everything.
+    Employees see what they reported. Engineers see only what is assigned to
+    them, which includes nothing they reported themselves until an admin
+    assigns it to them. Facility Admins see everything.
 
     Returns a new statement; SQLAlchemy 2.0 selects are generative, so this
     chains anywhere in construction -- before or after joins, filters and
@@ -56,12 +57,7 @@ def scope_incidents(
         case Role.FACILITY_ADMIN:
             return statement
         case Role.ENGINEER:
-            return statement.where(
-                or_(
-                    entity.assignee_id == principal.user_id,
-                    entity.reporter_id == principal.user_id,
-                )
-            )
+            return statement.where(entity.assignee_id == principal.user_id)
         case Role.EMPLOYEE:
             return statement.where(entity.reporter_id == principal.user_id)
     # Fail closed. A new role defaulting to "sees everything" is the worst

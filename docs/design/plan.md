@@ -128,7 +128,7 @@ pool_recycle=280, connect_args={"connect_timeout": 10}` (A4, A5).
 
 A frozen `TransitionRule` dataclass and a `TRANSITIONS` tuple of the 7 legal edges, indexed by
 `(source, target)`. Rules are written in terms of an `Actor` **relationship**
-(`ADMIN` / `ASSIGNED_ENGINEER` / `ANY_ENGINEER` / `REPORTER`), not a role; `actors_for(ctx)` derives
+(`ADMIN` / `ASSIGNED_ENGINEER` / `REPORTER`), not a role; `actors_for(ctx)` derives
 which ones the caller satisfies. `validate_transition` checks **edge → actor → required fields** in
 that order, which is what makes "admin bypasses the actor check but *not* required fields" fall out
 structurally rather than as a special case. `Closed` is terminal purely because no rule has
