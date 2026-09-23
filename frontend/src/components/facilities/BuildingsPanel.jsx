@@ -5,13 +5,13 @@ import Button from '@mui/material/Button'
 import InputAdornment from '@mui/material/InputAdornment'
 import OutlinedInput from '@mui/material/OutlinedInput'
 import Typography from '@mui/material/Typography'
-import useMediaQuery from '@mui/material/useMediaQuery'
 import { visuallyHidden } from '@mui/utils'
 import { ArrowLeft, MagnifyingGlass } from '@phosphor-icons/react'
 import ConfirmDialog from '../ConfirmDialog'
 import RecordDialog from '../RecordDialog'
 import RecordList from './RecordList'
 import { useLoad } from '../../lib/useLoad'
+import { useWide } from '../../lib/useViewport'
 import {
   createBuilding,
   createFloor,
@@ -97,7 +97,7 @@ function matches(text, query) {
  * retired" switch, which sets `include_inactive` on the API calls.
  */
 export default function BuildingsPanel({ retired, notify }) {
-  const wide = useMediaQuery((theme) => theme.breakpoints.up('md'))
+  const wide = useWide()
   const [searchParams, setSearchParams] = useSearchParams()
   const buildingId = searchParams.get('building')
   const floorId = searchParams.get('floor')

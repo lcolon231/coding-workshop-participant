@@ -15,7 +15,6 @@ import TableCell from '@mui/material/TableCell'
 import TableHead from '@mui/material/TableHead'
 import TableRow from '@mui/material/TableRow'
 import Typography from '@mui/material/Typography'
-import useMediaQuery from '@mui/material/useMediaQuery'
 import { visuallyHidden } from '@mui/utils'
 import { MagnifyingGlass, Plus, UsersThree } from '@phosphor-icons/react'
 import { useAuth } from '../auth/AuthContext'
@@ -26,6 +25,7 @@ import Notice from '../components/Notice'
 import { formatDate } from '../lib/format'
 import { PAGE_SIZE } from '../lib/incidents'
 import { ROLES, USER_SORT_OPTIONS } from '../lib/users'
+import { useWide } from '../lib/useViewport'
 import { createUser, deactivateUser, listUsers, updateUser } from '../services/auth'
 
 const DEFAULT_SORT = USER_SORT_OPTIONS[0].value
@@ -224,7 +224,7 @@ function UserCards({ items, loading, selfId, actions }) {
 
 export default function UsersPage() {
   const { user: me } = useAuth()
-  const wide = useMediaQuery((theme) => theme.breakpoints.up('md'))
+  const wide = useWide()
   const [searchParams, setSearchParams] = useSearchParams()
   const filters = useMemo(() => readFilters(searchParams), [searchParams])
   const [draft, setDraft] = useState({ base: filters.search, text: filters.search })

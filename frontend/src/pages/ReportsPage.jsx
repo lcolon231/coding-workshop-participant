@@ -37,11 +37,11 @@ import { useLoad } from '../lib/useLoad'
 import { listBuildings } from '../services/facilities'
 import { fetchSla, fetchSummary, fetchVolume } from '../services/reports'
 
-const selectSx = { minWidth: { xs: '100%', sm: 160 }, '& .MuiSelect-select': { py: 1 } }
+const selectSx = { flex: 1, minWidth: { xs: 0, sm: 160 }, '& .MuiSelect-select': { py: 1 } }
 
 function Control({ id, label, children }) {
   return (
-    <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+    <Stack direction="row" spacing={1} sx={{ alignItems: 'center', width: { xs: '100%', md: 'auto' }, minWidth: 0 }}>
       <Typography component="label" htmlFor={id} variant="body2" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
         {label}
       </Typography>
