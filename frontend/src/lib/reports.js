@@ -188,8 +188,3 @@ export async function collectAll(fetchPage) {
   }
   return items
 }
-
-/** "incidents-2026-08-25-to-2026-09-23.csv" */
-export function exportFilename(range) {
-  return `incidents-${range.from}-to-${range.to}.csv`
-}

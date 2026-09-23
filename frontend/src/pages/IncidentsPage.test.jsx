@@ -50,6 +50,9 @@ describe('IncidentsPage', () => {
     const table = screen.getByRole('table')
     expect(within(table).getByText('Hank Vance')).toBeInTheDocument()
     expect(calls(fetch)[0]).toBe('GET /api/incidents?sort=created_at&order=desc&limit=25&offset=0')
+    // The admin overview and the export are not for an employee.
+    expect(screen.queryByRole('region', { name: 'Overview' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Download CSV' })).not.toBeInTheDocument()
   })
 
   it('stacks the rows on a phone', async () => {
@@ -123,6 +126,69 @@ describe('IncidentsPage', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Database unavailable.')
     await userEvent.click(screen.getByRole('button', { name: 'Try again' }))
     expect(await screen.findByText('Showing 1 to 2 of 2')).toBeInTheDocument()
+  })
+
+  it('gives admins the overview and a CSV of the filtered list, and nobody else', async () => {
+    const saved = []
+    // jsdom has no object URLs; keep the real constructor and add the two statics.
+    vi.stubGlobal(
+      'URL',
+      class extends URL {
+        static createObjectURL = vi.fn((blob) => {
+          saved.push(blob)
+          return 'blob:incidents'
+        })
+        static revokeObjectURL = vi.fn()
+      },
+    )
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    const fetch = stubApi([
+      ['GET', '/api/incidents/reports/buildings', () => jsonResponse(200, { rows: [{ building_id: 'b-1', building: 'HQ', count: 2, open_count: 1, critical_count: 0 }] })],
+      ['GET', '/api/incidents/reports/engineers', () => jsonResponse(200, { rows: [] })],
+      ['GET', '/api/facilities/buildings', () => jsonResponse(200, page([{ id: 'b-1', name: 'HQ' }]))],
+      [
+        'GET',
+        '/api/incidents',
+        ({ url }) => {
+          const offset = Number(url.searchParams.get('offset'))
+          if (url.searchParams.get('limit') !== '100') return jsonResponse(200, page(TWO, { total: 101 }))
+          const items = offset === 0 ? Array.from({ length: 100 }, (_, i) => incidentFixture({ id: `inc-${i}` })) : [TWO[1]]
+          return jsonResponse(200, page(items, { total: 101, limit: 100, offset }))
+        },
+      ],
+    ])
+    renderList({ user: ADMIN, initialEntries: ['/?status=Blocked'] })
+
+    expect(await screen.findByRole('region', { name: 'Overview' })).toBeInTheDocument()
+    expect(await screen.findByRole('region', { name: 'Most incidents' })).toHaveTextContent('HQ2')
+    const download = screen.getByRole('button', { name: 'Download CSV' })
+    await waitFor(() => expect(download).toBeEnabled())
+    await userEvent.click(download)
+    expect(await screen.findByRole('status')).toHaveTextContent('Exported 101 incidents.')
+    expect(calls(fetch)).toContain('GET /api/incidents?status=Blocked&sort=created_at&order=asc&limit=100&offset=100')
+    expect(click).toHaveBeenCalledTimes(1)
+    const text = await saved[0].text()
+    expect(text.split('\r\n')[0]).toBe('id,title,status,priority,building,reporter,assignee,reported_at,acknowledged_at,resolved_at,closed_at')
+    expect(text).toContain('inc-2,Lift stuck between floors,In Progress,High,HQ,Eve Employee,Hank Vance,2026-09-22T09:12:00Z,,,')
+    click.mockRestore()
+  })
+
+  it('reports an export that failed instead of saving a partial file', async () => {
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    stubApi([
+      ['GET', '/api/incidents/reports/buildings', () => jsonResponse(200, { rows: [] })],
+      ['GET', '/api/incidents/reports/engineers', () => jsonResponse(200, { rows: [] })],
+      ['GET', '/api/facilities/buildings', () => jsonResponse(500, { error: 'internal_error', message: 'Database unavailable.' })],
+      ['GET', '/api/incidents', () => jsonResponse(200, page(TWO))],
+    ])
+    renderList({ user: ADMIN })
+
+    const download = await screen.findByRole('button', { name: 'Download CSV' })
+    await waitFor(() => expect(download).toBeEnabled())
+    await userEvent.click(download)
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not export: Database unavailable.')
+    expect(click).not.toHaveBeenCalled()
+    click.mockRestore()
   })
 
   it('offers "Assigned to me" to engineers only', async () => {

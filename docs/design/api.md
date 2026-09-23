@@ -583,9 +583,10 @@ stamped timestamps on `incidents` — no window functions, no scan of the histor
   most completed first. Same outer-join shape: every active engineer appears even idle, a
   deactivated one only while they still hold incidents.
 
-The dashboard's "All incidents" table and CSV export are the ordinary list (I2) with
-`created_from` / `created_to`, the same inclusive UTC dates the reports use, so the rows are
-exactly the incidents the numbers counted.
+Both feed the admin overview on the landing page (T124). The "Download CSV" beside the list is
+the ordinary list (I2) walked page by page under its current filters; `created_from` /
+`created_to` on I2 use the same inclusive UTC dates as the reports, for a client that wants
+exactly the rows a report counted.
 
 ---
 

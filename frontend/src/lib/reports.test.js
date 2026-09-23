@@ -6,7 +6,6 @@ import {
   countOf,
   csvCell,
   defaultRange,
-  exportFilename,
   incidentsCsv,
   openBacklog,
   pivotVolume,
@@ -153,9 +152,5 @@ describe('csv export', () => {
     const shrinking = vi.fn(async () => ({ items: [], total: 5 }))
     expect(await collectAll(shrinking)).toEqual([])
     expect(shrinking).toHaveBeenCalledTimes(1)
-  })
-
-  it('names the file after the range', () => {
-    expect(exportFilename({ from: '2026-08-25', to: '2026-09-23' })).toBe('incidents-2026-08-25-to-2026-09-23.csv')
   })
 })
