@@ -47,7 +47,11 @@ from acme_core.schemas.incident import (
     TransitionRequest,
 )
 from acme_core.schemas.report import (
+    BuildingRow,
+    BuildingsReport,
     CountBucket,
+    EngineerRow,
+    EngineersReport,
     ReportRange,
     SlaParams,
     SlaReport,
@@ -594,5 +598,47 @@ def volume_report(session: Session, params: VolumeParams) -> VolumeReport:
         rows=[
             VolumeRow(bucket_start=bucket.date(), group=_label(group), count=count)
             for bucket, group, count in repo.volume_rows(session, params)
+        ],
+    )
+
+
+def buildings_report(session: Session, window: ReportRange) -> BuildingsReport:
+    """Incident counts per building, busiest first."""
+    return BuildingsReport(
+        date_from=window.date_from,
+        date_to=window.date_to,
+        rows=[
+            BuildingRow(
+                building_id=building_id,
+                building=name,
+                count=count,
+                open_count=int(open_count),
+                critical_count=int(critical),
+            )
+            for building_id, name, _active, count, open_count, critical in (
+                repo.building_rows(session, window)
+            )
+        ],
+    )
+
+
+def engineers_report(session: Session, window: ReportRange) -> EngineersReport:
+    """Workload and throughput per engineer, most completed first."""
+    return EngineersReport(
+        date_from=window.date_from,
+        date_to=window.date_to,
+        rows=[
+            EngineerRow(
+                engineer_id=engineer_id,
+                engineer=name,
+                is_active=is_active,
+                assigned_count=assigned,
+                open_count=int(open_count),
+                completed_count=int(completed),
+                mean_resolve_seconds=_seconds(mean_resolve),
+            )
+            for engineer_id, name, is_active, assigned, open_count, completed, mean_resolve in (
+                repo.engineer_rows(session, window)
+            )
         ],
     )

@@ -20,7 +20,7 @@ import uuid
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from sqlalchemy import Row, Select, case, func, or_, select
+from sqlalchemy import Row, Select, and_, case, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy.sql.elements import ColumnElement
 
@@ -35,6 +35,7 @@ from acme_core.models import (
     IncidentStatus,
     IncidentStatusHistory,
     Priority,
+    Role,
     Seat,
     User,
 )
@@ -139,6 +140,7 @@ def list_incidents(
         statement = statement.where(Incident.category_id == filters.category_id)
     if filters.assignee_id is not None:
         statement = statement.where(Incident.assignee_id == filters.assignee_id)
+    statement = statement.where(*_created_between(filters.created_from, filters.created_to))
     if filters.search:
         pattern = like_pattern(filters.search)
         statement = statement.where(
@@ -343,14 +345,31 @@ def get_user(session: Session, user_id: uuid.UUID) -> User | None:
 # --------------------------------------------------------------------------- reports
 
 
+def _created_between(
+    date_from: dt.date | None, date_to: dt.date | None
+) -> list[ColumnElement[bool]]:
+    """Conditions keeping incidents created on the inclusive dates, in UTC."""
+    conditions: list[ColumnElement[bool]] = []
+    if date_from is not None:
+        start = dt.datetime.combine(date_from, dt.time.min, tzinfo=dt.UTC)
+        conditions.append(Incident.created_at >= start)
+    if date_to is not None:
+        end = dt.datetime.combine(date_to + dt.timedelta(days=1), dt.time.min, tzinfo=dt.UTC)
+        conditions.append(Incident.created_at < end)
+    return conditions
+
+
+def _window_conditions(window: ReportRange) -> list[ColumnElement[bool]]:
+    """The report's creation window and building filter, as conditions."""
+    conditions = _created_between(window.date_from, window.date_to)
+    if window.building_id is not None:
+        conditions.append(Incident.building_id == window.building_id)
+    return conditions
+
+
 def _window(statement: Select[Any], window: ReportRange) -> Select[Any]:
     """Restrict a select over incidents to the report's creation window."""
-    start = dt.datetime.combine(window.date_from, dt.time.min, tzinfo=dt.UTC)
-    end = dt.datetime.combine(window.date_to + dt.timedelta(days=1), dt.time.min, tzinfo=dt.UTC)
-    statement = statement.where(Incident.created_at >= start, Incident.created_at < end)
-    if window.building_id is not None:
-        statement = statement.where(Incident.building_id == window.building_id)
-    return statement
+    return statement.where(*_window_conditions(window))
 
 
 def count_by(
@@ -430,6 +449,89 @@ def sla_rows(session: Session, params: SlaParams) -> Sequence[Row[Any]]:
         joined,
     )
     statement = _window(statement, params).group_by(label).order_by(label)
+    return session.execute(statement).all()
+
+
+_FINISHED = (IncidentStatus.RESOLVED, IncidentStatus.CLOSED)
+
+
+def _count_where(condition: ColumnElement[bool]) -> ColumnElement[int]:
+    """`COUNT(*) FILTER (WHERE ...)`, spelled so an outer join's empty side counts 0."""
+    return func.coalesce(func.sum(case((condition, 1), else_=0)), 0)
+
+
+def building_rows(session: Session, window: ReportRange) -> Sequence[Row[Any]]:
+    """Count incidents in the window per building, busiest first.
+
+    An outer join from `buildings`, with the window on the join rather than
+    in `WHERE`, so a building with nothing in the window still appears with
+    zeros. Retired buildings appear only while they still have incidents.
+
+    Returns:
+        Per building: id, name, is_active, count, open count, critical count.
+    """
+    total = func.count(Incident.id).label("total")
+    statement = (
+        select(
+            Building.id,
+            Building.name,
+            Building.is_active,
+            total,
+            _count_where(Incident.status.notin_(_FINISHED)),
+            _count_where(Incident.priority == Priority.CRITICAL),
+        )
+        .select_from(Building)
+        .join(
+            Incident,
+            and_(Incident.building_id == Building.id, *_window_conditions(window)),
+            isouter=True,
+        )
+        .group_by(Building.id)
+        .having(or_(Building.is_active.is_(True), total > 0))
+        .order_by(total.desc(), Building.name, Building.id)
+    )
+    if window.building_id is not None:
+        statement = statement.where(Building.id == window.building_id)
+    return session.execute(statement).all()
+
+
+def engineer_rows(session: Session, window: ReportRange) -> Sequence[Row[Any]]:
+    """Each engineer's assigned, still-open and completed incidents in the window.
+
+    Same shape as `building_rows`: an outer join from `users` so an idle
+    engineer appears with zeros, and a deactivated one only while they still
+    hold incidents. "Completed" is Resolved or Closed with a resolution stamp,
+    so an incident closed without work (Open -> Closed) counts for nobody.
+
+    Returns:
+        Per engineer: id, name, is_active, assigned, open, completed, and the
+        mean seconds from report to resolution over the completed ones.
+    """
+    completed = Incident.status.in_(_FINISHED) & Incident.resolved_at.isnot(None)
+    resolve = func.extract("epoch", Incident.resolved_at - Incident.created_at)
+    assigned = func.count(Incident.id).label("assigned")
+    done = _count_where(completed).label("completed")
+    statement = (
+        select(
+            User.id,
+            User.full_name,
+            User.is_active,
+            assigned,
+            _count_where(Incident.status.notin_(_FINISHED)),
+            done,
+            func.avg(case((completed, resolve))),
+        )
+        .select_from(User)
+        .join(
+            Incident,
+            and_(Incident.assignee_id == User.id, *_window_conditions(window)),
+            isouter=True,
+        )
+        .where(User.role == Role.ENGINEER)
+        .group_by(User.id)
+        .having(or_(User.is_active.is_(True), assigned > 0))
+        .order_by(done.desc(), assigned.desc(), User.full_name, User.id)
+    )
     return session.execute(statement).all()
 
 

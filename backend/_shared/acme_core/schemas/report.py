@@ -125,3 +125,54 @@ class VolumeReport(_Window):
     interval: str
     group_by: str
     rows: list[VolumeRow]
+
+
+class BuildingRow(ResponseModel):
+    """Incident counts for one building. `open` is anything not Resolved or Closed."""
+
+    building_id: uuid.UUID
+    building: str
+    count: int
+    open_count: int
+    critical_count: int
+
+
+class BuildingsReport(_Window):
+    """Which buildings generate the most incidents, busiest first.
+
+    Every active building appears, even with nothing in the window, so a
+    quiet building reads as quiet rather than missing. A retired building
+    appears only while it still has incidents in the window.
+    """
+
+    rows: list[BuildingRow]
+
+
+class EngineerRow(ResponseModel):
+    """One engineer's workload over the window.
+
+    `assigned_count` is every incident in the window assigned to them now;
+    `open_count` the share of those still not Resolved or Closed;
+    `completed_count` those they resolved (Resolved or Closed with a
+    resolution). `mean_resolve_seconds` is over the completed ones; null when
+    there are none.
+    """
+
+    engineer_id: uuid.UUID
+    engineer: str
+    is_active: bool
+    assigned_count: int
+    open_count: int
+    completed_count: int
+    mean_resolve_seconds: float | None
+
+
+class EngineersReport(_Window):
+    """Engineer workload and throughput, most completed first.
+
+    Every active engineer appears, even with nothing assigned, so an idle
+    engineer reads as idle rather than missing. A deactivated engineer
+    appears only while they still hold incidents in the window.
+    """
+
+    rows: list[EngineerRow]

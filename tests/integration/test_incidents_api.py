@@ -208,7 +208,7 @@ class TestRouteContract:
                 resp = incidents_client.request(method.upper(), url, json={})
                 assert resp.status_code == 401, f"{method.upper()} {path} -> {resp.status_code}"
                 checked += 1
-        assert checked == 17, "the protected-route count changed; update this test deliberately"
+        assert checked == 19, "the protected-route count changed; update this test deliberately"
 
     def test_static_paths_are_not_swallowed_by_the_id_route(
         self, incidents_client: TestClient, actors: Actors
@@ -440,6 +440,31 @@ class TestList:
             P, params={"building_id": str(world.inactive_building.id)}, headers=actors.admin
         ).json()
         assert by_building["total"] == 0
+
+    def test_filters_by_creation_date(
+        self, incidents_client: TestClient, api: Api, actors: Actors, db_session: Session,
+        seeded: dict[str, Any],
+    ) -> None:
+        today = dt.datetime.now(dt.UTC).date()
+        old = api.report(actors.employee, title="Last month")
+        backdate(db_session, old["id"], created_at=dt.datetime.now(dt.UTC) - dt.timedelta(days=40))
+        week = {
+            "created_from": (today - dt.timedelta(days=6)).isoformat(),
+            "created_to": today.isoformat(),
+        }
+        recent = incidents_client.get(P, params=week, headers=actors.admin).json()
+        assert "Last month" not in {i["title"] for i in recent["items"]}
+        assert recent["total"] == 3
+        before = incidents_client.get(
+            P, params={"created_to": (today - dt.timedelta(days=7)).isoformat()},
+            headers=actors.admin,
+        ).json()
+        assert [i["title"] for i in before["items"]] == ["Last month"]
+        inverted = incidents_client.get(
+            P, params={"created_from": today.isoformat(), "created_to": "2020-01-01"},
+            headers=actors.admin,
+        )
+        assert inverted.status_code == 400
 
     def test_search_escapes_wildcards(
         self, incidents_client: TestClient, api: Api, actors: Actors, seeded: dict[str, Any]
@@ -1336,7 +1361,7 @@ def backdate(session: Session, incident_id: str, **stamps: dt.datetime) -> None:
 
 
 class TestReports:
-    @pytest.mark.parametrize("path", ["summary", "sla", "volume"])
+    @pytest.mark.parametrize("path", ["summary", "sla", "volume", "buildings", "engineers"])
     @pytest.mark.parametrize("who", ["employee", "engineer"])
     def test_admin_only(
         self, incidents_client: TestClient, actors: Actors, path: str, who: str
@@ -1496,3 +1521,76 @@ class TestReports:
             f"{P}/reports/volume", params={"group_by": "status"}, headers=actors.admin
         ).json()
         assert {r["group"] for r in by_status["rows"]} == {"Open"}
+
+    def test_buildings_busiest_first_with_quiet_active_ones(
+        self, incidents_client: TestClient, api: Api, actors: Actors, db_session: Session,
+        world: World,
+    ) -> None:
+        annex = Building(code="ANX", name="Annex")
+        db_session.add(annex)
+        db_session.commit()
+        api.report(actors.employee, building_id=str(annex.id), priority="Critical")
+        api.report(actors.employee, building_id=str(annex.id))
+        hq = api.resolved(actors)
+        api.moved(actors.employee, hq["id"], "Closed")
+
+        body = incidents_client.get(f"{P}/reports/buildings", headers=actors.admin).json()
+        assert body["rows"] == [
+            {"building_id": str(annex.id), "building": "Annex",
+             "count": 2, "open_count": 2, "critical_count": 1},
+            {"building_id": str(world.building.id), "building": "Headquarters",
+             "count": 1, "open_count": 0, "critical_count": 0},
+        ]
+        # The retired building has nothing in the window, so it is not listed.
+        assert "Decommissioned" not in {r["building"] for r in body["rows"]}
+
+        one = incidents_client.get(
+            f"{P}/reports/buildings", params={"building_id": str(annex.id)},
+            headers=actors.admin,
+        ).json()
+        assert [r["building"] for r in one["rows"]] == ["Annex"]
+
+    def test_engineers_most_completed_first(
+        self, incidents_client: TestClient, api: Api, actors: Actors, db_session: Session,
+        world: World,
+    ) -> None:
+        now = dt.datetime.now(dt.UTC)
+        # The engineer resolves two (one is then closed) and still holds one.
+        first = api.resolved(actors)
+        backdate(db_session, first["id"], created_at=now - dt.timedelta(hours=2))
+        second = api.resolved(actors)
+        api.moved(actors.employee, second["id"], "Closed")
+        backdate(db_session, second["id"], created_at=now - dt.timedelta(hours=4))
+        api.in_progress(actors)
+        # The other engineer holds one, blocked.
+        held = api.in_progress(actors, engineer=world.other_engineer)
+        api.moved(actors.admin, held["id"], "Blocked", blocked_reason="Parts on order")
+        # Closed without work: counts for nobody.
+        untouched = api.report(actors.employee)
+        api.moved(actors.admin, untouched["id"], "Closed", resolution_note="Duplicate")
+
+        body = incidents_client.get(f"{P}/reports/engineers", headers=actors.admin).json()
+        rows = body["rows"]
+        assert [r["engineer_id"] for r in rows] == [
+            str(world.engineer.id), str(world.other_engineer.id)
+        ]
+        lead, other = rows
+        assert (lead["assigned_count"], lead["open_count"], lead["completed_count"]) == (3, 1, 2)
+        assert lead["is_active"] is True
+        assert 3 * 3600 <= lead["mean_resolve_seconds"] < 3 * 3600 + 60
+        assert (other["assigned_count"], other["open_count"], other["completed_count"]) == (1, 1, 0)
+        assert other["mean_resolve_seconds"] is None
+        # Deactivated and holding nothing: not listed.
+        assert str(world.inactive_engineer.id) not in {r["engineer_id"] for r in rows}
+
+    def test_engineers_with_nothing_still_appear(
+        self, incidents_client: TestClient, actors: Actors, world: World
+    ) -> None:
+        body = incidents_client.get(f"{P}/reports/engineers", headers=actors.admin).json()
+        assert {r["engineer"] for r in body["rows"]} == {
+            world.engineer.full_name, world.other_engineer.full_name
+        }
+        assert all(
+            (r["assigned_count"], r["completed_count"], r["mean_resolve_seconds"]) == (0, 0, None)
+            for r in body["rows"]
+        )
