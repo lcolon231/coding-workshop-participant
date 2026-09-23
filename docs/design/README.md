@@ -1,12 +1,14 @@
 # Design documents — ACME Facility Incident Management
 
-Design artifacts for the backend scaffold and the `auth` vertical slice.
-**No implementation code exists yet**; these are planning documents.
+Design artifacts for ACME Facility Incident Management. Written before the code, kept current
+alongside it: the implementation follows these documents, and where a deploy taught something
+different (T123's header finding, A2's reversal) the document says so in place. For the delivered
+system, its measured numbers and the demo script, start at the root [`NOTES.md`](../../NOTES.md).
 
 | File | What it is |
 |---|---|
 | [plan.md](plan.md) | The implementation plan. Current, revision 4. Start here. |
-| [api.md](api.md) | The HTTP contract for all three services: 52 endpoints, roles, errors, and decisions to confirm. |
+| [api.md](api.md) | The HTTP contract for all three services: 57 endpoints, roles, errors, and the decisions taken. |
 | [tasks.md](tasks.md) | Every task required to complete the project, with status and gates. |
 | [reviews.md](reviews.md) | Findings from three review passes, with what was accepted and what was rejected and why. |
 | [plan-before-review.md](plan-before-review.md) | Revision 3, kept only so the reviews' effect can be diffed. Superseded. |
@@ -31,5 +33,5 @@ diff -u docs/design/plan-before-review.md docs/design/plan.md
 
 ## Status
 
-Design complete. Five items remain empirically unverified rather than undesigned — listed at the end
-of [reviews.md](reviews.md) — and are scheduled into commit 1 and the deploy gate.
+Implemented and deployed (2026-09-23). Every endpoint in `api.md` exists and answers through
+CloudFront; the task list records what each deploy verified and the few items left open.
