@@ -17,10 +17,10 @@ are placed in the phase where they belong.
 | 2 | `auth` service | 16 / 16 |
 | 3 | `incidents` service | 15 / 16 |
 | 4 | `facilities` service | 9 / 10 |
-| 5 | Frontend | 13 / 24 |
+| 5 | Frontend | 16 / 24 |
 | 6 | Cloud, CI and operations | 3 / 14 |
 | 7 | Documentation and handover | 0 / 7 |
-| | **Total** | **71 / 122** |
+| | **Total** | **74 / 122** |
 
 ---
 
@@ -142,9 +142,9 @@ Currently one line of work is allocated. **Roughly 2.5 of the rubric's 5 compete
 - [ ] **T93** "Waking the database" state for the Aurora resume case, rather than a generic spinner.
 - [ ] **T94** PWA — manifest, service worker, offline shell *(rubric §5)*.
 - [x] **T95** Vitest + React Testing Library setup. *(jsdom, `src/test/setup.js`, router-aware `renderPage` helper)*
-- [ ] **T96** Component tests to **80%+** *(rubric)*.
-- [ ] **T97** Playwright config + proxy spec (`/api/auth/login` → 400, proving the proxy wiring).
-- [ ] **T98** E2E on critical paths — login → create incident → transition → resolve *(rubric wants 100% of critical paths)*.
+- [x] **T96** Component tests to **80%+** *(rubric)*. *(100 Vitest tests over 15 files; 85.9% statements, 79.9% branches measured 2026-09-23; `vite.config.js` now fails `test:coverage`, and so CI, below 80% statements/lines/functions and 75% branches)*
+- [x] **T97** Playwright config + proxy spec (`/api/auth/login` → 400, proving the proxy wiring). *(`frontend/playwright.config.js` starts its own backend, `tools/e2e_backend.py`: a throwaway `acme_e2e_ui` database, migrated and seeded with `ACME_SEED_PASSWORD`, served on :8100 by the same devserver as `make serve`; Vite on :3100 proxies `/api` there via `VITE_API_PROXY`. `e2e/proxy.spec.js` proves the empty login is the API's own 400 envelope and every service's `healthz` answers through the proxy. `npm run test:e2e`; needs local PostgreSQL and `.venv`, not wired into CI)*
+- [x] **T98** E2E on critical paths — login → create incident → transition → resolve *(rubric wants 100% of critical paths)*. *(`e2e/critical-path.spec.js`: a new employee registers and signs in, reports an incident against seeded facilities, the seed admin acknowledges it assigning Hank Vance and resolves it, the reporter confirms and closes, and the list shows Closed; a second spec proves another employee gets "Incident not found" for it, the 404-not-403 rule)*
 
 ## Phase 6 — Cloud, CI and operations
 
