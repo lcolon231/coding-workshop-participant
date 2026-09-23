@@ -8,6 +8,9 @@ import './index.css'
 import { theme } from './theme'
 import AuthProvider from './auth/AuthProvider'
 import App from './App.jsx'
+import { registerServiceWorker } from './pwa'
+
+registerServiceWorker()
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

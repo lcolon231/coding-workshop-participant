@@ -7,6 +7,7 @@ import Typography from '@mui/material/Typography'
 import { useAuth } from './auth/AuthContext'
 import RequireRole from './auth/RequireRole'
 import AppShell from './components/AppShell'
+import OfflineBanner from './components/OfflineBanner'
 import WakingBanner from './components/WakingBanner'
 import FacilitiesPage from './pages/FacilitiesPage'
 import IncidentPage from './pages/IncidentPage'
@@ -72,6 +73,7 @@ function RequireUser({ children }) {
 export default function App() {
   return (
     <>
+      <OfflineBanner />
       <WakingBanner />
       <Routes>
         <Route path="/login" element={<LoginPage />} />
