@@ -7,7 +7,7 @@
  */
 
 /** The categorical order: adjacent pairs stay distinct under colour-vision deficiency. */
-export const SERIES_SLOTS = ['blue', 'orange', 'aqua', 'yellow', 'magenta', 'green', 'violet', 'red']
+export const SERIES_SLOTS = ['violet', 'orange', 'aqua', 'yellow', 'magenta', 'green', 'blue', 'red']
 
 function palette(theme) {
   return (theme.vars ?? theme).palette.chart

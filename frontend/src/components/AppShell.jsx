@@ -48,6 +48,7 @@ function UserMenu({ user, onSignOut }) {
             fontSize: '0.8125rem',
             fontWeight: 600,
             bgcolor: 'primary.main',
+            background: 'linear-gradient(135deg, var(--mui-palette-primary-dark), var(--mui-palette-primary-light))',
             color: 'primary.contrastText',
           }}
         >
@@ -106,13 +107,29 @@ export default function AppShell() {
         display: 'flex',
         flexDirection: 'column',
         bgcolor: 'background.default',
+        // A faint accent glow behind the top of every page.
+        backgroundImage:
+          'radial-gradient(80% 320px at 50% -80px, rgba(var(--mui-palette-primary-mainChannel) / 0.09), transparent)',
+        backgroundRepeat: 'no-repeat',
       }}
     >
       <AppBar
         position="sticky"
         elevation={0}
         color="transparent"
-        sx={{ bgcolor: 'background.paper', borderBottom: 1, borderColor: 'divider' }}
+        sx={{
+          bgcolor: 'background.paper',
+          borderBottom: 1,
+          borderColor: 'divider',
+          // A hairline of the accent along the top edge.
+          '&::before': {
+            content: '""',
+            position: 'absolute',
+            inset: '0 0 auto 0',
+            height: 3,
+            background: 'linear-gradient(90deg, var(--mui-palette-primary-dark), var(--mui-palette-primary-light))',
+          },
+        }}
       >
         <Toolbar
           disableGutters
@@ -135,8 +152,22 @@ export default function AppShell() {
               textDecoration: 'none',
               whiteSpace: 'nowrap',
               mr: { xs: 0, sm: 2 },
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 1,
             }}
           >
+            <Box
+              component="span"
+              aria-hidden="true"
+              sx={{
+                width: 12,
+                height: 12,
+                borderRadius: '4px',
+                background: 'linear-gradient(135deg, var(--mui-palette-primary-dark), var(--mui-palette-primary-light))',
+                flexShrink: 0,
+              }}
+            />
             <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>
               ACME Facility Incidents
             </Box>
@@ -171,7 +202,11 @@ export default function AppShell() {
                   px: 1.5,
                   flexShrink: 0,
                   color: 'text.secondary',
-                  '&.active': { color: 'text.primary', bgcolor: 'action.selected' },
+                  '&:hover': { transform: 'none', bgcolor: 'rgba(var(--mui-palette-primary-mainChannel) / 0.06)' },
+                  '&.active': {
+                    color: 'primary.main',
+                    bgcolor: 'rgba(var(--mui-palette-primary-mainChannel) / 0.1)',
+                  },
                 }}
               >
                 {item.label}

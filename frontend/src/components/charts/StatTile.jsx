@@ -14,6 +14,7 @@ export default function StatTile({ label, value, hint }) {
         borderColor: 'divider',
         borderRadius: 1,
         bgcolor: 'background.paper',
+        boxShadow: 1,
         minWidth: 0,
       }}
     >
