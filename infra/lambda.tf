@@ -3,12 +3,16 @@ module "lambda" {
   source   = "terraform-aws-modules/lambda/aws"
   version  = "~> 8.0"
 
+  # memory_size: CPU scales with memory. At 128 MB (about a fourteenth of a
+  # vCPU) a login's bcrypt check took 4-6 s in CloudWatch and every service sat
+  # at 105-113 MB used, one heavier request from being killed. 512 MB is still
+  # a tiny function, and the warm request cost drops with the duration.
   function_name   = format("%s-%s-%s", var.aws_project, each.value.name, local.app_id)
   package_type    = "Zip"
   architectures   = [each.value.arch]
   handler         = each.value.handler
   runtime         = each.value.runtime
-  memory_size     = 128
+  memory_size     = 512
   timeout         = 300
   tracing_mode    = "PassThrough"
   build_in_docker = false

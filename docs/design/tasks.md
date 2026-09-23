@@ -199,7 +199,7 @@ Real limitations, recorded rather than silently carried. Each belongs in NOTES.m
 |---|---|
 | Burst connection exhaustion | Needs `reserved_concurrent_executions` — a Terraform change, which is out of scope. |
 | CloudFront rewrites API 404s to `200 index.html` | Distribution-level `custom_error_response`; handled on the client instead. |
-| First cloud request may 504 | Aurora resume can exceed CloudFront's 30 s origin timeout. Mitigated by a warm-up, not fixed. |
+| First cloud request may 504 | Aurora resume can exceed CloudFront's 30 s origin timeout (measured 45-60 s). Mitigated by a warm-up; for demo day `min_capacity` is 0.5 so it never pauses, to be put back to 0 afterwards. |
 | `@acme.inc` is validation, not authentication | No email verification. Anyone may assert an address they do not control. |
 | Session credentials expire | `ENVIRONMENT.config` holds STS tokens; cloud work needs `./bin/setup-participant.sh` re-run. |
 | `bin/start-dev.sh` is unused | It hard-exits without LocalStack. `make serve` replaces it; documented in T113. |

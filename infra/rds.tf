@@ -22,9 +22,13 @@ resource "aws_rds_cluster" "this" {
   vpc_security_group_ids          = data.aws_security_groups.this.ids
   enabled_cloudwatch_logs_exports = ["postgresql"]
 
+  # min_capacity 0 lets the cluster pause when idle; the first request after a
+  # quiet spell then waited 45-60 s for it to resume (measured 2026-09-23),
+  # which is what the client's waking banner covers. 0.5 keeps it awake for
+  # about six cents an hour. Set for demo day; put back to 0.0 afterwards.
   serverlessv2_scaling_configuration {
     max_capacity = 4.0
-    min_capacity = 0.0
+    min_capacity = 0.5
   }
 
   tags = local.app_tags
