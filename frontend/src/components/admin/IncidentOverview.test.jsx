@@ -51,33 +51,45 @@ afterEach(() => {
 })
 
 describe('IncidentOverview', () => {
-  it('ranks buildings by incidents, still open and critical over the last 30 days', async () => {
+  it('charts each building as finished and open, busiest first, over the last 30 days', async () => {
     const fetch = stubApi(routes())
     renderOverview()
 
     const buildings = await screen.findByRole('region', { name: 'Buildings' })
-    await within(buildings).findByRole('region', { name: 'Most incidents' })
+    const chart = await within(buildings).findByRole('img', { name: 'Incidents per building, finished and still open' })
     expect(calls(fetch)).toEqual(
       expect.arrayContaining([
         'GET /api/incidents/reports/buildings?from=2026-08-25&to=2026-09-23',
         'GET /api/incidents/reports/engineers?from=2026-08-25&to=2026-09-23',
       ]),
     )
-    expect(names(buildings, 'Most incidents')).toEqual(['Headquarters7', 'Riverside Annex3'])
-    expect(names(buildings, 'Still open')).toEqual(['Riverside Annex3', 'Headquarters2'])
+    expect(Array.from(chart.querySelectorAll('rect[aria-label]')).map((rect) => rect.getAttribute('aria-label'))).toEqual([
+      'Headquarters: 7 incidents',
+      'Riverside Annex: 3 incidents',
+    ])
     expect(names(buildings, 'Critical')).toEqual(['Headquarters1', 'Riverside Annex0'])
     expect(screen.getByRole('button', { name: 'Last 30 days' })).toHaveAttribute('aria-pressed', 'true')
+
+    await userEvent.click(within(buildings).getByRole('button', { name: 'View as table' }))
+    const table = within(buildings).getByRole('table', { name: 'Building' })
+    const hq = within(table).getByText('Headquarters').closest('tr')
+    expect(within(hq).getAllByRole('cell').map((cell) => cell.textContent)).toEqual(['Headquarters', '5', '2', '7', '1'])
   })
 
-  it("shows each engineer's workload and who completed the most", async () => {
+  it("charts each engineer's completed and open work, and tables the detail", async () => {
     stubApi(routes())
     renderOverview()
 
     const engineers = await screen.findByRole('region', { name: 'Engineers' })
-    await within(engineers).findByRole('table', { name: 'Engineer workload' })
-    expect(names(engineers, 'Completed')).toEqual(['Hank Vance4', 'Ida Lupin0'])
-    expect(names(engineers, 'Open workload')[0]).toBe('Ida Lupin2')
+    const chart = await within(engineers).findByRole('img', { name: 'Incidents per engineer, completed and still open' })
+    const legend = within(engineers).getByRole('list', { name: 'Series' })
+    expect(within(legend).getAllByRole('listitem').map((item) => item.textContent)).toEqual(['Completed', 'Open'])
+    expect(Array.from(chart.querySelectorAll('rect[aria-label]')).map((rect) => rect.getAttribute('aria-label'))).toEqual([
+      'Hank Vance: 5 incidents',
+      'Ida Lupin: 2 incidents',
+    ])
 
+    await userEvent.click(within(engineers).getByRole('button', { name: 'View as table' }))
     const table = within(engineers).getByRole('table', { name: 'Engineer workload' })
     const hank = within(table).getByText('Hank Vance').closest('tr')
     expect(within(hank).getAllByRole('cell').map((cell) => cell.textContent)).toEqual(['Hank Vance', '5', '1', '4', '2h 15m'])
@@ -88,8 +100,8 @@ describe('IncidentOverview', () => {
   it('reloads both halves for another range', async () => {
     const fetch = stubApi(routes())
     renderOverview()
-    await screen.findByRole('region', { name: 'Most incidents' })
 
+    await screen.findByRole('img', { name: /Incidents per building/ })
     await userEvent.click(screen.getByRole('button', { name: 'Last 7 days' }))
     await waitFor(() =>
       expect(calls(fetch)).toEqual(
@@ -116,6 +128,6 @@ describe('IncidentOverview', () => {
     expect(await screen.findByRole('heading', { name: 'No incidents in this range' })).toBeInTheDocument()
     expect(await screen.findByRole('alert')).toHaveTextContent('Database unavailable.')
     await userEvent.click(screen.getByRole('button', { name: 'Try again' }))
-    expect(await screen.findByRole('table', { name: 'Engineer workload' })).toBeInTheDocument()
+    expect(await screen.findByRole('img', { name: /Incidents per engineer/ })).toBeInTheDocument()
   })
 })

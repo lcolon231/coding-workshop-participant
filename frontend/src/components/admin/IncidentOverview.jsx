@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react'
 import Box from '@mui/material/Box'
+import Button from '@mui/material/Button'
 import Chip from '@mui/material/Chip'
 import Skeleton from '@mui/material/Skeleton'
 import Stack from '@mui/material/Stack'
@@ -10,10 +11,11 @@ import TableHead from '@mui/material/TableHead'
 import TableRow from '@mui/material/TableRow'
 import Typography from '@mui/material/Typography'
 import { formatDuration } from '../../lib/format'
-import { RANGE_PRESETS, rangeEnding } from '../../lib/reports'
+import { RANGE_PRESETS, buildingBars, engineerBars, rangeEnding } from '../../lib/reports'
 import { useLoad } from '../../lib/useLoad'
 import { fetchBuildings, fetchEngineers } from '../../services/reports'
 import BarList from '../charts/BarList'
+import StackedBars from '../charts/StackedBars'
 import { EmptyState, LoadError } from '../PageState'
 
 const DEFAULT_DAYS = 30
@@ -23,14 +25,25 @@ function ranked(rows, label, count) {
   return [...rows].sort((a, b) => count(b) - count(a)).map((row) => ({ key: label(row), count: count(row) }))
 }
 
-function Section({ id, title, children }) {
+function Section({ id, title, action, children }) {
   return (
     <Box component="section" aria-labelledby={id}>
-      <Typography component="h3" variant="h6" id={id} sx={{ fontWeight: 600, mb: 2 }}>
-        {title}
-      </Typography>
+      <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+        <Typography component="h3" variant="h6" id={id} sx={{ fontWeight: 600 }}>
+          {title}
+        </Typography>
+        {action}
+      </Stack>
       {children}
     </Box>
+  )
+}
+
+function TableToggle({ on, onToggle }) {
+  return (
+    <Button size="small" variant="outlined" onClick={onToggle} aria-pressed={on} sx={{ minHeight: 32 }}>
+      {on ? 'View as chart' : 'View as table'}
+    </Button>
   )
 }
 
@@ -72,9 +85,15 @@ function EngineerTable({ rows }) {
  * The admin's view over the list: which buildings generate the incidents,
  * and what each engineer holds and has completed, over the last 7, 30 or
  * 90 days. Each half loads and retries on its own.
+ *
+ * Both charts are stacked bars with the same two slots, finished then
+ * open, so the eye reads "how much is left" the same way in each; the
+ * numbers stay reachable through the table views and the workload table.
  */
 export default function IncidentOverview() {
   const [days, setDays] = useState(DEFAULT_DAYS)
+  const [buildingsTable, setBuildingsTable] = useState(false)
+  const [engineersTable, setEngineersTable] = useState(false)
   const { from, to } = rangeEnding(new Date(), days)
   const loadBuildings = useCallback(() => fetchBuildings({ from, to }), [from, to])
   const loadEngineers = useCallback(() => fetchEngineers({ from, to }), [from, to])
@@ -85,6 +104,9 @@ export default function IncidentOverview() {
   const buildingsTotal = buildingRows.reduce((sum, row) => sum + row.count, 0)
   const engineerRows = engineers.data?.rows ?? []
   const engineersTotal = engineerRows.reduce((sum, row) => sum + row.assigned_count, 0)
+  const buildingChart = buildingBars(buildingRows)
+  const engineerChart = engineerBars(engineerRows)
+  const critical = [{ name: 'Critical', value: (row) => row.critical }]
 
   return (
     <Box component="section" aria-labelledby="overview-heading" sx={{ p: { xs: 2, md: 3 }, border: 1, borderColor: 'divider', borderRadius: 1, bgcolor: 'background.paper' }}>
@@ -117,7 +139,11 @@ export default function IncidentOverview() {
       </Stack>
 
       <Stack spacing={4}>
-        <Section id="overview-buildings" title="Buildings">
+        <Section
+          id="overview-buildings"
+          title="Buildings"
+          action={buildingsTotal > 0 && <TableToggle on={buildingsTable} onToggle={() => setBuildingsTable((v) => !v)} />}
+        >
           {buildings.error && (
             <Box sx={{ mb: 2 }}>
               <LoadError message={buildings.error} onRetry={buildings.reload} />
@@ -128,15 +154,25 @@ export default function IncidentOverview() {
           ) : buildingsTotal === 0 ? (
             <EmptyState title="No incidents in this range" body="Buildings rank by incidents once something has been reported." />
           ) : (
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' }, gap: 4, opacity: buildings.loading ? 0.6 : 1 }}>
-              <BarList title="Most incidents" items={buildingRows.map((row) => ({ key: row.building, count: row.count }))} />
-              <BarList title="Still open" items={ranked(buildingRows, (row) => row.building, (row) => row.open_count)} />
-              <BarList title="Critical" items={ranked(buildingRows, (row) => row.building, (row) => row.critical_count)} />
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '2fr 1fr' }, gap: 4, opacity: buildings.loading ? 0.6 : 1 }}>
+              <StackedBars
+                rows={buildingChart.rows}
+                series={buildingChart.series}
+                extras={critical}
+                table={buildingsTable}
+                ariaLabel="Incidents per building, finished and still open"
+                tableLabel="Building"
+              />
+              {!buildingsTable && <BarList title="Critical" items={ranked(buildingRows, (row) => row.building, (row) => row.critical_count)} />}
             </Box>
           )}
         </Section>
 
-        <Section id="overview-engineers" title="Engineers">
+        <Section
+          id="overview-engineers"
+          title="Engineers"
+          action={engineersTotal > 0 && <TableToggle on={engineersTable} onToggle={() => setEngineersTable((v) => !v)} />}
+        >
           {engineers.error && (
             <Box sx={{ mb: 2 }}>
               <LoadError message={engineers.error} onRetry={engineers.reload} />
@@ -148,15 +184,19 @@ export default function IncidentOverview() {
             <EmptyState title="No engineers yet" body="Workload appears once an engineer has an account." />
           ) : (
             <Stack spacing={3} sx={{ opacity: engineers.loading ? 0.6 : 1 }}>
-              {engineersTotal > 0 && (
-                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 4 }}>
-                  <BarList title="Completed" items={engineerRows.map((row) => ({ key: row.engineer, count: row.completed_count }))} />
-                  <BarList title="Open workload" items={ranked(engineerRows, (row) => row.engineer, (row) => row.open_count)} />
+              {engineersTotal > 0 && !engineersTable && (
+                <StackedBars
+                  rows={engineerChart.rows}
+                  series={engineerChart.series}
+                  ariaLabel="Incidents per engineer, completed and still open"
+                  tableLabel="Engineer"
+                />
+              )}
+              {(engineersTotal === 0 || engineersTable) && (
+                <Box sx={{ overflowX: 'auto' }}>
+                  <EngineerTable rows={engineerRows} />
                 </Box>
               )}
-              <Box sx={{ overflowX: 'auto' }}>
-                <EngineerTable rows={engineerRows} />
-              </Box>
             </Stack>
           )}
         </Section>
