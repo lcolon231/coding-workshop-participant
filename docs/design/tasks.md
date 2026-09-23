@@ -16,11 +16,11 @@ are placed in the phase where they belong.
 | 1 | `acme_core` shared kernel | 30 / 30 |
 | 2 | `auth` service | 16 / 16 |
 | 3 | `incidents` service | 15 / 16 |
-| 4 | `facilities` service | 0 / 10 |
+| 4 | `facilities` service | 9 / 10 |
 | 5 | Frontend | 10 / 24 |
-| 6 | Cloud, CI and operations | 2 / 12 |
+| 6 | Cloud, CI and operations | 3 / 13 |
 | 7 | Documentation and handover | 0 / 7 |
-| | **Total** | **58 / 120** |
+| | **Total** | **68 / 121** |
 
 ---
 
@@ -106,15 +106,15 @@ are placed in the phase where they belong.
 
 ## Phase 4 — `facilities` service
 
-- [ ] **T65** Service scaffold.
-- [ ] **T66** Buildings CRUD.
-- [ ] **T67** Floors CRUD — uniqueness per building+level surfaced as 409.
-- [ ] **T68** Seats CRUD — uniqueness per floor+code.
-- [ ] **T69** Categories CRUD incl. sub-categories.
-- [ ] **T70** Engineer profiles CRUD — admin only.
-- [ ] **T71** Nested listings (`/buildings/{id}/floors`, `/floors/{id}/seats`).
-- [ ] **T72** Referential-integrity handling — deleting a building with floors is 409, not 500. The FKs are `ON DELETE CASCADE`, so the service checks for children **before** deleting; tests assert the floors and seats **still exist** after the rejected delete, not only the status code.
-- [ ] **T73** Integration tests for all of the above.
+- [x] **T65** Service scaffold. *(discovered automatically once `requirements.txt` exists; pytest, coverage, ruff, pyright, bandit and CI each needed a line; the dev-server fallback test had used `facilities` as its example of a service with no package)*
+- [x] **T66** Buildings CRUD. *(`include_inactive` is honoured for admins only, ignored rather than refused for everyone else, so an employee's incident form never offers a retired building)*
+- [x] **T67** Floors CRUD — uniqueness per building+level surfaced as 409. *(on update as well as create, flushed inside a savepoint so the session survives; a floor is exactly as visible as its building)*
+- [x] **T68** Seats CRUD — uniqueness per floor+code. *(a non-admin sees a seat only when it and its building are active; the single read joins both)*
+- [x] **T69** Categories CRUD incl. sub-categories. *(two things the database cannot enforce: root names are checked by the service because NULL parents are distinct under the unique constraint, and `passive_deletes` on `Category.children` stops the ORM nulling a child's parent before the RESTRICT key can refuse. Deactivating a root does not cascade; the client builds the tree from active roots)*
+- [x] **T70** Engineer profiles CRUD — admin only. *(read and update only, keyed by user id; "engineer" means the user's role is Engineer and they are active, because a demotion leaves the profile row behind; `open_assignments` is a correlated subquery so it can be sorted on, since the pager keeps only the first column)*
+- [x] **T71** Nested listings (`/buildings/{id}/floors`, `/floors/{id}/seats`). *(the parent's visibility is checked first; a retired parent is 404 to non-admins)*
+- [x] **T72** Referential-integrity handling — deleting a building with floors is 409, not 500. The FKs are `ON DELETE CASCADE`, so the service checks for children **before** deleting; tests assert the floors and seats **still exist** after the rejected delete, not only the status code. *(also `incidents.floor_id` and `seat_id` are `SET NULL`, so the database would not refuse those deletes either; the service counts incident references for every resource. Where the database does refuse, the delete is flushed inside a savepoint and the `IntegrityError` maps to the same 409; tests miss each pre-check on purpose to prove it)*
+- [x] **T73** Integration tests for all of the above. *(`test_facilities_api.py`, 118 tests, both roles, the 404/200 pair on one retired id per resource)*
 - [ ] **T74** Deploy and smoke-test.
 
 ## Phase 5 — Frontend
@@ -131,7 +131,7 @@ Currently one line of work is allocated. **Roughly 2.5 of the rubric's 5 compete
 - [x] **T82** App shell — responsive navigation, role-aware menu. *(`components/AppShell.jsx`: one 64px bar, wordmark, primary links, report action, account menu showing name and role; report action collapses to an icon on phones)*
 - [x] **T83** Incident list — filters, pagination, empty/loading/error states. *(`pages/IncidentsPage.jsx`: filters and page live in the URL, search debounced, table above `md` and stacked rows below, engineers get "Assigned to me"; 8 tests)*
 - [x] **T84** Incident detail — notes, history timeline, internal notes hidden for employees. *(`pages/IncidentPage.jsx`: notes with a staff-only visibility toggle, history, details with facility names resolved when the facilities service answers, escalation requests, admin triage of assignee and priority through `PUT`; 404 and per-section failures handled; 8 tests)*
-- [x] **T85** Incident create form — building/floor/seat cascade, client validation before submit. *(`pages/NewIncidentPage.jsx` against api.md §3; the facilities service (T65-T71) is not built yet, so locally the form shows the "buildings could not be loaded" state until it lands; 5 tests)*
+- [x] **T85** Incident create form — building/floor/seat cascade, client validation before submit. *(`pages/NewIncidentPage.jsx` against api.md §3; written before the facilities service (T65-T71) landed, against the same contract; 5 tests)*
 - [x] **T86** Transition controls driven by the workflow — only legal actions rendered, required fields prompted. *(driven by `allowed_transitions` on the incident, the per-incident answer api.md I3 prescribes for the UI; `TransitionDialog` prompts for exactly `requires`, engineers self-assign, admins choose from active engineers)*
 - [ ] **T87** Admin screens — user management, role assignment.
 - [ ] **T88** Facilities management screens.
@@ -158,8 +158,9 @@ Currently one line of work is allocated. **Roughly 2.5 of the rubric's 5 compete
 - [ ] **T106** Deploy the frontend via `bin/deploy-frontend.sh aws`; verify the CloudFront URL end to end.
 - [x] **T107** CI test job — pytest + coverage with a PostgreSQL service container, `htmlcov` uploaded as an artifact. *(`.github/workflows/python.tests.yml`: Python 3.13, `postgres:17` service, `make lint` + `make cov` verbatim, `backend-coverage` artifact kept 14 days even on a red run)*
 - [x] **T108** CI frontend job — lint plus Vitest. *(`.github/workflows/react.tests.yml`: Node 24, `npm ci` cached on the lockfile, lint → test → `test:coverage`, `frontend-coverage` artifact kept 14 days; no threshold yet, 84.77% statements measured for T96)*
-- [ ] **T109** Raise the coverage ratchet to its final value once all services exist.
+- [x] **T109** Raise the coverage ratchet to its final value once all services exist. *(decided 2026-09-22: the final value is the current 98. Measured 99.8% with all three services against a rubric goal of 80%, so the gate already over-delivers and the time goes to deploy day instead)*
 - [ ] **T110** Re-verify `./bin/cleanup-environment.sh` still works against everything deployed.
+- [ ] **T122** Load test on deploy day, **if time allows**: one Artillery run against the deployed login and incident-list endpoints at modest concurrency; record p95, error rate and any connection errors in NOTES.md next to the cold-start and memory numbers. Expected finding: `pool_size=1` per Lambda with no `reserved_concurrent_executions` (plan known-gaps table) — state the limit rather than fix it. *(rubric "Performance Testing"; not a coverage item)*
 
 ## Phase 7 — Documentation and handover
 

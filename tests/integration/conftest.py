@@ -271,6 +271,14 @@ def incidents_client(db_session: Session) -> TestClient:
     return build_client(db_session, "incidents", [router])
 
 
+@pytest.fixture
+def facilities_client(db_session: Session) -> TestClient:
+    """The facilities service, wired to the same test transaction as `auth_client`."""
+    from facilities_service.routes import router
+
+    return build_client(db_session, "facilities", [router])
+
+
 class UserFactory:
     """Create committed users, with a known password, for API tests."""
 

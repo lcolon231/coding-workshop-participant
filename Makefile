@@ -67,7 +67,7 @@ lint: ## Ruff + bandit, matching what CI runs
 	$(VENV)/bin/ruff check backend tests tools
 	# Exclude only the VENDORED copies. '*/acme_core/*' would also match
 	# backend/_shared/acme_core and silently skip the real source.
-	$(VENV)/bin/bandit -q -r ./backend -x './backend/auth/acme_core,./backend/incidents/acme_core'
+	$(VENV)/bin/bandit -q -r ./backend -x './backend/auth/acme_core,./backend/incidents/acme_core,./backend/facilities/acme_core'
 
 audit: ## Report known vulnerabilities in pinned runtime dependencies
 	$(PIP) install --quiet pip-audit && $(VENV)/bin/pip-audit -r backend/$(SERVICE)/requirements.txt

@@ -47,11 +47,12 @@ jobs:
             requirements-dev.txt
             backend/auth/requirements.txt
             backend/incidents/requirements.txt
+            backend/facilities/requirements.txt
 
       # A real .venv so `make lint` and `make cov` run verbatim, with the same
       # PYTHONPATH the Makefile exports locally. `make venv` is not used because
       # it installs one service's requirements (SERVICE=auth); the suite imports
-      # both services.
+      # every service.
       - name: Install dependencies
         run: |
           python -m venv .venv
@@ -59,7 +60,8 @@ jobs:
           .venv/bin/pip install --quiet \
             -r requirements-dev.txt \
             -r backend/auth/requirements.txt \
-            -r backend/incidents/requirements.txt
+            -r backend/incidents/requirements.txt \
+            -r backend/facilities/requirements.txt
 
       # The vendored copies (backend/<service>/acme_core) are committed. Fail
       # fast if anything resolves acme_core from one of them instead of the

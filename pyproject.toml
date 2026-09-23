@@ -8,7 +8,7 @@ testpaths = ["tests"]
 # Source of truth first. Tests must never exercise backend/auth/acme_core (the
 # rsynced build artifact) or they could pass against a stale copy.
 # "." makes tools/ importable, so the dev server has a test.
-pythonpath = ["backend/_shared", "backend/auth", "backend/incidents", "."]
+pythonpath = ["backend/_shared", "backend/auth", "backend/incidents", "backend/facilities", "."]
 addopts = [
     "-ra",
     "--strict-markers",
@@ -38,7 +38,7 @@ xfail_strict = true
 [tool.coverage.run]
 # Packages, never "backend/auth" -- that directory holds vendored dependencies
 # at build time and would inflate the denominator into meaninglessness.
-source = ["acme_core", "auth_service", "incidents_service"]
+source = ["acme_core", "auth_service", "incidents_service", "facilities_service"]
 branch = true
 parallel = true
 relative_files = true
@@ -57,6 +57,7 @@ omit = [
     # error. Add one line per new service.
     "backend/auth/acme_core/*",
     "backend/incidents/acme_core/*",
+    "backend/facilities/acme_core/*",
 ]
 
 [tool.coverage.paths]
@@ -79,7 +80,7 @@ exclude_also = [
 [tool.ruff]
 target-version = "py313"
 line-length = 100
-src = ["backend/_shared", "backend/auth", "backend/incidents", "tests", "."]
+src = ["backend/_shared", "backend/auth", "backend/incidents", "backend/facilities", "tests", "."]
 extend-exclude = [
     # Repo-provided reference code. Not ours to restyle, and changing it would
     # diverge from upstream for no benefit.

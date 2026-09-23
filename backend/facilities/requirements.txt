@@ -1,0 +1,31 @@
+# Runtime dependencies for the facilities Lambda. Exact == pins: infra/lambda.tf
+# sets build_in_docker = false, so these resolve against the deploy host's
+# Python (the VDI: linux-x86_64, CPython 3.13, matching the python3.13 runtime
+# in infra/locals.tf:56). The versions are the auth service's, on purpose: the
+# three functions share acme_core and must agree on every library it imports.
+
+SQLAlchemy==2.0.54
+psycopg[binary]==3.3.6
+fastapi==0.141.1
+
+# starlette is fastapi's transitive dependency, constrained only as >=0.46.0.
+# Left unpinned, a fresh install resolves 1.x, whose TestClient deprecates
+# httpx in favour of httpx2 and, under filterwarnings=error, fails the suite
+# at collection (first CI run). 0.49.3 is the version the suite is verified
+# against; the same pin as the other services, on purpose.
+starlette==0.49.3
+
+# Not alembic. Migrations and the seed ship only with the auth function
+# (tools/sync-shared.sh AUTH_ONLY), so there is one door to a schema change.
+# /readyz imports the migration check lazily and reports `migrations_pending:
+# null` when it is absent, rather than failing.
+
+# acme_core.security imports both at package import, so they are needed even
+# though this service never hashes a password or validates an address itself.
+bcrypt==5.0.0
+email-validator==2.3.0
+# Access-token verification for every authenticated route.
+PyJWT==2.11.0
+
+# ASGI -> Lambda adapter. Imported lazily in function.py, only for HTTP events.
+mangum==0.22.0
