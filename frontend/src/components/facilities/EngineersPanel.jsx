@@ -16,6 +16,7 @@ import { visuallyHidden } from '@mui/utils'
 import { EmptyState, LoadError } from '../PageState'
 import RecordDialog from '../RecordDialog'
 import { useLoad } from '../../lib/useLoad'
+import { useWide } from '../../lib/useViewport'
 import { listEngineers, updateEngineer } from '../../services/facilities'
 
 const FIELDS = [
@@ -59,12 +60,63 @@ function Filter({ id, label, value, onChange, children }) {
   )
 }
 
+function AvailabilityChip({ available }) {
+  return (
+    <Chip
+      size="small"
+      variant="outlined"
+      label={available ? 'Available' : 'Unavailable'}
+      color={available ? 'success' : 'default'}
+      sx={{ fontWeight: 500 }}
+    />
+  )
+}
+
+function loadColor(engineer) {
+  return engineer.open_assignments >= engineer.max_concurrent_incidents ? 'warning.main' : 'text.primary'
+}
+
+/** Below `md` the table becomes a stack of rows, as every list in the app does. */
+function EngineerCards({ items, loading, onEdit }) {
+  return (
+    <Stack component="ul" aria-busy={loading} sx={{ listStyle: 'none', m: 0, p: 0, opacity: loading && items ? 0.6 : 1 }}>
+      {items === null
+        ? Array.from({ length: 3 }, (_, i) => (
+            <Box component="li" key={i} sx={{ py: 2, borderBottom: 1, borderColor: 'divider' }}>
+              <Skeleton width="60%" />
+              <Skeleton width="40%" />
+            </Box>
+          ))
+        : items.map((engineer) => (
+            <Box component="li" key={engineer.user_id} sx={{ py: 2, borderBottom: 1, borderColor: 'divider' }}>
+              <Typography sx={{ fontWeight: 500 }}>{engineer.user.full_name}</Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                {engineer.specialty}
+              </Typography>
+              <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                  <AvailabilityChip available={engineer.is_available} />
+                  <Typography variant="body2" sx={{ color: loadColor(engineer) }}>
+                    {engineer.open_assignments} of {engineer.max_concurrent_incidents}
+                  </Typography>
+                </Stack>
+                <Button size="small" variant="outlined" sx={{ minHeight: 32 }} onClick={() => onEdit(engineer)}>
+                  Edit
+                </Button>
+              </Stack>
+            </Box>
+          ))}
+    </Stack>
+  )
+}
+
 /**
  * Engineer profiles with their current load, so an admin can tune who
  * takes work. Profiles are created with the user (Users screen) and live
  * as long as the user, so this only edits.
  */
 export default function EngineersPanel({ notify }) {
+  const wide = useWide()
   const [sort, setSort] = useState('full_name')
   const [availability, setAvailability] = useState('')
   const load = useCallback(
@@ -121,6 +173,8 @@ export default function EngineersPanel({ notify }) {
           title="No engineers"
           body="Create a user with the Engineer role and they will appear here with their specialty and load."
         />
+      ) : !wide ? (
+        <EngineerCards items={items} loading={loading} onEdit={setEditing} />
       ) : (
         <Table sx={{ opacity: loading && items ? 0.6 : 1 }}>
           <TableHead>
@@ -160,19 +214,9 @@ export default function EngineersPanel({ notify }) {
                     <TableCell sx={{ fontWeight: 500 }}>{engineer.user.full_name}</TableCell>
                     <TableCell>{engineer.specialty}</TableCell>
                     <TableCell>
-                      <Chip
-                        size="small"
-                        variant="outlined"
-                        label={engineer.is_available ? 'Available' : 'Unavailable'}
-                        color={engineer.is_available ? 'success' : 'default'}
-                        sx={{ fontWeight: 500 }}
-                      />
+                      <AvailabilityChip available={engineer.is_available} />
                     </TableCell>
-                    <TableCell
-                      sx={{
-                        color: engineer.open_assignments >= engineer.max_concurrent_incidents ? 'warning.main' : 'text.primary',
-                      }}
-                    >
+                    <TableCell sx={{ color: loadColor(engineer) }}>
                       {engineer.open_assignments} of {engineer.max_concurrent_incidents}
                     </TableCell>
                     <TableCell align="right">

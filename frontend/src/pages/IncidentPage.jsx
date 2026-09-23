@@ -6,7 +6,6 @@ import Link from '@mui/material/Link'
 import Skeleton from '@mui/material/Skeleton'
 import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
-import useMediaQuery from '@mui/material/useMediaQuery'
 import { ArrowLeft, MagnifyingGlass } from '@phosphor-icons/react'
 import { useAuth } from '../auth/AuthContext'
 import { PriorityChip, StatusChip } from '../components/IncidentChips'
@@ -19,6 +18,7 @@ import TransitionDialog from '../components/incident/TransitionDialog'
 import TriagePanel from '../components/incident/TriagePanel'
 import { formatDateTime, formatRelative } from '../lib/format'
 import { FORWARD_TRANSITIONS, canRequestEscalation, isAdmin, isStaff } from '../lib/incidents'
+import { useWide } from '../lib/useViewport'
 import { ApiError } from '../services/api'
 import { listUsers } from '../services/auth'
 import { getBuilding, getCategory, getFloor, getSeat } from '../services/facilities'
@@ -112,7 +112,7 @@ export default function IncidentPage() {
   const admin = isAdmin(user)
   const staff = isStaff(user)
   // Two columns above `md`; below it the actions move up under the title.
-  const wide = useMediaQuery((theme) => theme.breakpoints.up('md'))
+  const wide = useWide()
 
   const [attempt, setAttempt] = useState(0)
   const [result, setResult] = useState({ key: null, data: null, error: null, status: null })

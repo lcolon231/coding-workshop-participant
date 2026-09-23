@@ -17,7 +17,6 @@ import TableCell from '@mui/material/TableCell'
 import TableHead from '@mui/material/TableHead'
 import TableRow from '@mui/material/TableRow'
 import Typography from '@mui/material/Typography'
-import useMediaQuery from '@mui/material/useMediaQuery'
 import { visuallyHidden } from '@mui/utils'
 import { ClipboardText, MagnifyingGlass } from '@phosphor-icons/react'
 import { useAuth } from '../auth/AuthContext'
@@ -29,6 +28,7 @@ import { saveTextFile } from '../lib/download'
 import { formatDateTime, formatRelative, isoDate } from '../lib/format'
 import { PAGE_SIZE, PRIORITIES, SORT_OPTIONS, STATUSES, isAdmin } from '../lib/incidents'
 import { collectAll, incidentsCsv } from '../lib/reports'
+import { useWide } from '../lib/useViewport'
 import { listBuildings } from '../services/facilities'
 import { listIncidents } from '../services/incidents'
 
@@ -194,7 +194,7 @@ function IncidentCards({ items, loading }) {
 export default function IncidentsPage() {
   const { user } = useAuth()
   // One layout at a time: the table above `md`, stacked rows below it.
-  const wide = useMediaQuery((theme) => theme.breakpoints.up('md'))
+  const wide = useWide()
   const [searchParams, setSearchParams] = useSearchParams()
   const filters = useMemo(() => readFilters(searchParams), [searchParams])
   // The draft is tied to the URL value it was typed over, so a URL change

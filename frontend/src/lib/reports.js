@@ -188,3 +188,55 @@ export async function collectAll(fetchPage) {
   }
   return items
 }
+
+/** The series of the overview bars: what is done, then what is not. Fixed slots. */
+export const FINISHED = 'Finished'
+export const OPEN = 'Open'
+export const COMPLETED = 'Completed'
+export const UNRESOLVED = 'Closed unresolved'
+
+/**
+ * Building rows as stacked-bar rows: finished (Resolved or Closed) and
+ * still open, longest first. Critical rides along for the tooltip.
+ */
+export function buildingBars(rows) {
+  const series = [
+    { name: FINISHED, slot: 0 },
+    { name: OPEN, slot: 1 },
+  ]
+  const bars = rows
+    .map((row) => ({
+      key: row.building_id,
+      label: row.building,
+      values: { [FINISHED]: row.count - row.open_count, [OPEN]: row.open_count },
+      total: row.count,
+      critical: row.critical_count,
+    }))
+    .sort((a, b) => b.total - a.total)
+  return { series, rows: bars }
+}
+
+/**
+ * Engineer rows as stacked-bar rows: completed, still open, and, only when
+ * it happens, assigned incidents closed without a resolution. Most
+ * completed first.
+ */
+export function engineerBars(rows) {
+  const bars = rows
+    .map((row) => {
+      const unresolved = row.assigned_count - row.completed_count - row.open_count
+      return {
+        key: row.engineer_id,
+        label: row.engineer,
+        values: { [COMPLETED]: row.completed_count, [OPEN]: row.open_count, [UNRESOLVED]: unresolved },
+        total: row.assigned_count,
+      }
+    })
+    .sort((a, b) => b.values[COMPLETED] - a.values[COMPLETED] || b.total - a.total)
+  const series = [
+    { name: COMPLETED, slot: 0 },
+    { name: OPEN, slot: 1 },
+  ]
+  if (bars.some((bar) => bar.values[UNRESOLVED] > 0)) series.push({ name: UNRESOLVED, slot: 2 })
+  return { series, rows: bars }
+}

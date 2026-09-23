@@ -160,7 +160,7 @@ describe('IncidentsPage', () => {
     renderList({ user: ADMIN, initialEntries: ['/?status=Blocked'] })
 
     expect(await screen.findByRole('region', { name: 'Overview' })).toBeInTheDocument()
-    expect(await screen.findByRole('region', { name: 'Most incidents' })).toHaveTextContent('HQ2')
+    expect(await screen.findByRole('img', { name: /Incidents per building/ })).toBeInTheDocument()
     const download = screen.getByRole('button', { name: 'Download CSV' })
     await waitFor(() => expect(download).toBeEnabled())
     await userEvent.click(download)

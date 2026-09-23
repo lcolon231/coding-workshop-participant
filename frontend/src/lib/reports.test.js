@@ -2,10 +2,12 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   bucketStarts,
   buildSeries,
+  buildingBars,
   collectAll,
   countOf,
   csvCell,
   defaultRange,
+  engineerBars,
   incidentsCsv,
   openBacklog,
   pivotVolume,
@@ -152,5 +154,38 @@ describe('csv export', () => {
     const shrinking = vi.fn(async () => ({ items: [], total: 5 }))
     expect(await collectAll(shrinking)).toEqual([])
     expect(shrinking).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('overview bars', () => {
+  it('splits a building into finished and open, longest first, keeping critical aside', () => {
+    const { series, rows } = buildingBars([
+      { building_id: 'b-2', building: 'Annex', count: 3, open_count: 3, critical_count: 0 },
+      { building_id: 'b-1', building: 'HQ', count: 7, open_count: 2, critical_count: 1 },
+    ])
+    expect(series).toEqual([
+      { name: 'Finished', slot: 0 },
+      { name: 'Open', slot: 1 },
+    ])
+    expect(rows).toEqual([
+      { key: 'b-1', label: 'HQ', values: { Finished: 5, Open: 2 }, total: 7, critical: 1 },
+      { key: 'b-2', label: 'Annex', values: { Finished: 0, Open: 3 }, total: 3, critical: 0 },
+    ])
+  })
+
+  it('adds the unresolved series only when an assigned incident was closed without a fix', () => {
+    const plain = engineerBars([
+      { engineer_id: 'e-1', engineer: 'Hank', assigned_count: 3, open_count: 1, completed_count: 2 },
+    ])
+    expect(plain.series.map((entry) => entry.name)).toEqual(['Completed', 'Open'])
+    expect(plain.rows[0].values).toEqual({ Completed: 2, Open: 1, 'Closed unresolved': 0 })
+
+    const odd = engineerBars([
+      { engineer_id: 'e-1', engineer: 'Hank', assigned_count: 3, open_count: 1, completed_count: 1 },
+      { engineer_id: 'e-2', engineer: 'Ivy', assigned_count: 4, open_count: 0, completed_count: 4 },
+    ])
+    expect(odd.series.at(-1)).toEqual({ name: 'Closed unresolved', slot: 2 })
+    expect(odd.rows.map((row) => row.label)).toEqual(['Ivy', 'Hank'])
+    expect(odd.rows[1].values['Closed unresolved']).toBe(1)
   })
 })
