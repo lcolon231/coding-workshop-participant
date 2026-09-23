@@ -18,9 +18,9 @@ are placed in the phase where they belong.
 | 3 | `incidents` service | 17 / 17 |
 | 4 | `facilities` service | 10 / 10 |
 | 5 | Frontend | 22 / 25 |
-| 6 | Cloud, CI and operations | 3 / 14 |
-| 7 | Documentation and handover | 0 / 7 |
-| | **Total** | **82 / 123** |
+| 6 | Cloud, CI and operations | 4 / 14 |
+| 7 | Documentation and handover | 7 / 7 |
+| | **Total** | **90 / 123** |
 
 ---
 
@@ -155,7 +155,7 @@ Currently one line of work is allocated. **Roughly 2.5 of the rubric's 5 compete
 - [x] **T100** `make migrate-cloud` against Aurora. *(2026-09-23: Aurora stamped at `c49f04286e46`; the first invoke times out while a paused cluster resumes, the second connects)*
 - [ ] **T101** `make seed-cloud` with a payload-supplied password.
 - [ ] **T102** Characterise the CloudFront 404 rewrite empirically; confirm whether it caches.
-- [ ] **T103** Verify `/api/auth/docs` is reachable through CloudFront.
+- [x] **T103** Verify `/api/auth/docs` is reachable through CloudFront. *(2026-09-23: `/api/auth/docs`, `/api/incidents/docs` and each `openapi.json` answer 200 through the distribution)*
 - [ ] **T104** Test whether an absolute path in `requirements.txt` lets Terraform vendor `acme_core` — if it works it **deletes the rsync bug class** rather than detecting it.
 - [ ] **T105** `unzip -l` the built artifact; confirm nothing pip-installs into the service dir (justifies the simplified `.gitignore`).
 - [ ] **T106** Deploy the frontend via `bin/deploy-frontend.sh aws`; verify the CloudFront URL end to end.
@@ -168,13 +168,13 @@ Currently one line of work is allocated. **Roughly 2.5 of the rubric's 5 compete
 
 ## Phase 7 — Documentation and handover
 
-- [ ] **T111** `NOTES.md` — assumptions, trade-offs, **measured** numbers, known gaps table.
-- [ ] **T112** Root `README.md` backend section — architecture, the modular-monolith framing, `make` commands.
-- [ ] **T113** Document that `make serve` supersedes `bin/start-dev.sh`, and why *(the rubric scores "runs locally from documented commands")*.
-- [ ] **T114** API reference — link the live `/api/auth/docs`, plus an endpoint table.
-- [ ] **T115** Test-artifacts section — commands, results, and known gaps per tier *(rubric bullet, explicitly).*
-- [ ] **T116** Security notes — the pet-name password finding, the Function URL (IAM-only behind CloudFront since T123; still no edge control is an authorization boundary), `@acme.inc` as validation not authentication, the IAM caveat.
-- [ ] **T117** Demo script — the exact sequence to run in front of a reviewer, including the warm-up invoke.
+- [x] **T111** `NOTES.md` — assumptions, trade-offs, **measured** numbers, known gaps table. *(root `NOTES.md`; every number is from CloudWatch `REPORT` lines or a `curl` through CloudFront on 2026-09-23)*
+- [x] **T112** Root `README.md` backend section — architecture, the modular-monolith framing, `make` commands. *("The solution" section at the top of the root README)*
+- [x] **T113** Document that `make serve` supersedes `bin/start-dev.sh`, and why *(the rubric scores "runs locally from documented commands")*. *(README "Run it locally")*
+- [x] **T114** API reference — link the live `/api/auth/docs`, plus an endpoint table. *(README "API reference": the three live Swagger pages and a 27-row table over all 57 endpoints)*
+- [x] **T115** Test-artifacts section — commands, results, and known gaps per tier *(rubric bullet, explicitly).* *(README "Tests")*
+- [x] **T116** Security notes — the pet-name password finding, the Function URL (IAM-only behind CloudFront since T123; still no edge control is an authorization boundary), `@acme.inc` as validation not authentication, the IAM caveat. *(`NOTES.md` "Security notes")*
+- [x] **T117** Demo script — the exact sequence to run in front of a reviewer, including the warm-up invoke. *(`NOTES.md` "Demo script": a two-minute warm-up, nine steps, and the Aurora floor to revert afterwards)*
 
 ---
 
