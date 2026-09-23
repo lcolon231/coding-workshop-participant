@@ -1,5 +1,6 @@
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
+import ThemeToggle from './ThemeToggle'
 
 // TODO: replace with real ACME facility photography, portrait, about 1200x1600.
 const PANEL_IMAGE = 'https://picsum.photos/seed/acme-facility-lobby/1200/1600'
@@ -72,6 +73,7 @@ export default function AuthLayout({ title, subtitle, children, footer }) {
 
       <Box
         sx={{
+          position: 'relative',
           display: 'flex',
           flexDirection: 'column',
           px: { xs: 2, sm: 4 },
@@ -82,6 +84,7 @@ export default function AuthLayout({ title, subtitle, children, footer }) {
           backgroundRepeat: 'no-repeat',
         }}
       >
+        <ThemeToggle sx={{ position: 'absolute', top: 16, right: 16 }} />
         <Wordmark sx={{ display: { md: 'none' }, mb: 6 }} />
         <Box sx={{ width: '100%', maxWidth: 440, mx: 'auto', my: 'auto' }}>
           <Typography component="h1" variant="h1" sx={{ mb: 1 }}>

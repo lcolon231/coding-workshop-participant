@@ -17,6 +17,7 @@ import { useAuth } from '../auth/AuthContext'
 import { initials } from '../lib/format'
 import { isStaff } from '../lib/incidents'
 import NotificationBell from './NotificationBell'
+import ThemeToggle from './ThemeToggle'
 
 const ADMIN = ['Facility Admin']
 
@@ -234,6 +235,7 @@ export default function AppShell() {
             <Plus size={22} weight="bold" />
           </IconButton>
 
+          <ThemeToggle />
           {isStaff(user) && <NotificationBell />}
           <UserMenu user={user} onSignOut={signOut} />
         </Toolbar>
