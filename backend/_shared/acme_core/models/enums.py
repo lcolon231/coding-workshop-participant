@@ -58,3 +58,14 @@ class EscalationStatus(StrEnum):
     PENDING = "Pending"
     APPROVED = "Approved"
     REJECTED = "Rejected"
+
+
+class NotificationKind(StrEnum):
+    """Why a user is being told about an incident.
+
+    `ASSIGNED` goes to the engineer an incident was just assigned to;
+    `REPORTED` goes to every active Facility Admin when one is filed.
+    """
+
+    ASSIGNED = "Assigned"
+    REPORTED = "Reported"

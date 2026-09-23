@@ -12,6 +12,7 @@ from acme_core.models.catalog import Category
 from acme_core.models.enums import (
     EscalationStatus,
     IncidentStatus,
+    NotificationKind,
     NoteVisibility,
     Priority,
     Role,
@@ -23,6 +24,7 @@ from acme_core.models.incident import (
     IncidentNote,
     IncidentStatusHistory,
 )
+from acme_core.models.notification import Notification
 from acme_core.models.user import AppSecret, EngineerProfile, RefreshToken, User
 
 # The complete set, asserted against Base.metadata by the test suite so a new
@@ -38,6 +40,7 @@ EXPECTED_TABLES = frozenset(
         "incident_notes",
         "incident_status_history",
         "incidents",
+        "notifications",
         "refresh_tokens",
         "seats",
         "users",
@@ -59,6 +62,8 @@ __all__ = [
     "IncidentStatus",
     "IncidentStatusHistory",
     "NoteVisibility",
+    "Notification",
+    "NotificationKind",
     "Priority",
     "RefreshToken",
     "Role",

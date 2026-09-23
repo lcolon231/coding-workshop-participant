@@ -18,6 +18,7 @@ from acme_core.models.enums import (
     EscalationStatus,
     IncidentStatus,
     NoteVisibility,
+    NotificationKind,
     Priority,
     Role,
 )
@@ -37,8 +38,8 @@ class TestMetadataCompleteness:
         """A model module nothing imports is invisible to Alembic autogenerate."""
         assert set(TABLES) == set(EXPECTED_TABLES)
 
-    def test_twelve_tables(self) -> None:
-        assert len(TABLES) == 12
+    def test_thirteen_tables(self) -> None:
+        assert len(TABLES) == 13
 
     @pytest.mark.parametrize("name", sorted(EXPECTED_TABLES))
     def test_every_table_compiles_for_postgresql(self, name: str) -> None:
@@ -96,6 +97,7 @@ class TestEnumConstraints:
             ("incidents", Priority),
             ("incident_notes", NoteVisibility),
             ("escalation_requests", EscalationStatus),
+            ("notifications", NotificationKind),
         ],
         ids=lambda v: getattr(v, "__name__", str(v)),
     )
@@ -166,6 +168,8 @@ class TestReferentialPolicy:
             ("incident_notes", "incident_id"),
             ("incident_status_history", "incident_id"),
             ("escalation_requests", "incident_id"),
+            ("notifications", "incident_id"),
+            ("notifications", "user_id"),
             ("floors", "building_id"),
             ("seats", "floor_id"),
         ],
@@ -254,6 +258,7 @@ class TestRepresentations:
             Incident,
             IncidentNote,
             IncidentStatusHistory,
+            Notification,
             RefreshToken,
             Seat,
             User,
@@ -274,6 +279,7 @@ class TestRepresentations:
             "IncidentNote": IncidentNote(body="looking into it"),
             "IncidentStatusHistory": IncidentStatusHistory(),
             "EscalationRequest": EscalationRequest(reason="urgent"),
+            "Notification": Notification(incident_title="No heating"),
         }
 
     @pytest.mark.parametrize("name", sorted(_instances.__func__()))

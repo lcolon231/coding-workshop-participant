@@ -15,6 +15,8 @@ import Typography from '@mui/material/Typography'
 import { Plus, SignOut } from '@phosphor-icons/react'
 import { useAuth } from '../auth/AuthContext'
 import { initials } from '../lib/format'
+import { isStaff } from '../lib/incidents'
+import NotificationBell from './NotificationBell'
 
 const ADMIN = ['Facility Admin']
 
@@ -86,7 +88,8 @@ function UserMenu({ user, onSignOut }) {
 
 /**
  * The signed-in frame: one 64px bar with the wordmark, the primary links,
- * the report action and the account menu, over a contained page.
+ * the report action, the notification bell for staff (employees are never
+ * notified, so they get no bell) and the account menu, over a contained page.
  *
  * The bar never wraps: on phones the report action becomes an icon button,
  * the wordmark shortens, and an admin's four links scroll sideways rather
@@ -196,6 +199,7 @@ export default function AppShell() {
             <Plus size={22} weight="bold" />
           </IconButton>
 
+          {isStaff(user) && <NotificationBell />}
           <UserMenu user={user} onSignOut={signOut} />
         </Toolbar>
       </AppBar>

@@ -4,8 +4,8 @@ Every handler is a plain `def`: SQLAlchemy is synchronous, and a sync call
 inside `async def` would block the event loop for every other request (A6).
 
 Registration order is part of the contract (api.md §4): `/workflow`,
-`/escalations` and `/reports/*` are added **before** any `/{incident_id}`
-route, or the typed UUID parameter turns them into a confusing `400`.
+`/escalations`, `/notifications` and `/reports/*` are added **before** any
+`/{incident_id}` route, or the typed UUID parameter turns them into a confusing `400`.
 """
 
 from __future__ import annotations
@@ -33,6 +33,11 @@ from acme_core.schemas.incident import (
     StatusHistoryOut,
     TransitionRequest,
     WorkflowOut,
+)
+from acme_core.schemas.notification import (
+    NotificationFilters,
+    NotificationOut,
+    NotificationPage,
 )
 from acme_core.schemas.report import (
     BuildingsReport,
@@ -111,6 +116,56 @@ def decide_escalation(
     """Approve or reject. Approval raises the incident's priority one level."""
     return EscalationOut.model_validate(
         service.decide_escalation(session, admin, escalation_id, body)
+    )
+
+
+@router.get(
+    "/notifications",
+    response_model=NotificationPage,
+    responses=error_responses(400, 401),
+    tags=["notifications"],
+    summary="Your notifications",
+)
+def list_notifications(
+    caller: CurrentPrincipal, session: DbSession, filters: Annotated[NotificationFilters, Query()]
+) -> NotificationPage:
+    """The caller's own notifications, newest first, with the unread total for the badge."""
+    rows, total, unread = service.list_notifications(session, caller, filters)
+    return NotificationPage(
+        items=[NotificationOut.model_validate(row) for row in rows],
+        total=total,
+        limit=filters.limit,
+        offset=filters.offset,
+        unread_count=unread,
+    )
+
+
+@router.post(
+    "/notifications/read-all",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses=error_responses(401),
+    tags=["notifications"],
+    summary="Mark every notification read",
+)
+def read_all_notifications(caller: CurrentPrincipal, session: DbSession) -> Response:
+    """Clear the badge: every unread notification the caller has becomes read."""
+    service.mark_all_notifications_read(session, caller)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post(
+    "/notifications/{notification_id}/read",
+    response_model=NotificationOut,
+    responses=error_responses(400, 401, 404),
+    tags=["notifications"],
+    summary="Mark one notification read",
+)
+def read_notification(
+    notification_id: uuid.UUID, caller: CurrentPrincipal, session: DbSession
+) -> NotificationOut:
+    """Mark one of the caller's notifications read. Someone else's is 404, not 403."""
+    return NotificationOut.model_validate(
+        service.mark_notification_read(session, caller, notification_id)
     )
 
 

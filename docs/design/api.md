@@ -401,9 +401,12 @@ here. Paths are keyed by **user id**, which the client already has, not by profi
 | I17 | GET | `/reports/volume` | ADM | 200 `VolumeReport` | T59 |
 | I18 | GET | `/reports/buildings` | ADM | 200 `BuildingsReport` | T124 |
 | I19 | GET | `/reports/engineers` | ADM | 200 `EngineersReport` | T124 |
+| I20 | GET | `/notifications` | ANY (own rows) | 200 `NotificationPage` | T125 |
+| I21 | POST | `/notifications/read-all` | ANY (own rows) | 204 | T125 |
+| I22 | POST | `/notifications/{notification_id}/read` | ANY (own rows) | 200 `NotificationOut` | T125 |
 
-**Route order matters.** `/workflow`, `/escalations` and `/reports/*` must be registered **before**
-`/{incident_id}`. The typed UUID parameter would reject them anyway, but as a confusing `400` rather
+**Route order matters.** `/workflow`, `/escalations`, `/notifications` and `/reports/*` must be
+registered **before** `/{incident_id}`. The typed UUID parameter would reject them anyway, but as a confusing `400` rather
 than a match.
 
 ### How work actually flows (read this before I1–I6)
@@ -583,6 +586,37 @@ stamped timestamps on `incidents` — no window functions, no scan of the histor
   most completed first. Same outer-join shape: every active engineer appears even idle, a
   deactivated one only while they still hold incidents.
 
+### I20–I22 Notifications (T125)
+
+In-app only: nothing leaves the platform, since no mail or push channel exists in the deployment.
+A `notifications` row is written **in the same transaction** as the action it announces, so a
+notification can never describe a change that rolled back, and a change cannot commit without it.
+
+Two events produce one:
+
+- **`Reported`** — `POST /api/incidents` (I1) writes one row per **active Facility Admin**, except
+  the reporter when they are an admin themselves.
+- **`Assigned`** — a change of hands through `PUT` (I4) or a transition carrying `assignee_id` (I6)
+  writes one row for the **new** assignee. Re-saving the same assignee says nothing new, and an
+  engineer who names themselves is not told what they just did. A refused assignment (inactive
+  engineer, 400) leaves no row, because the whole request rolls back.
+
+The recipient is the only reader. Every query filters on the caller's id before anything else, so
+someone else's notification is `404`, never `403` (§1.5). `NotificationOut` carries the kind, the
+incident id, a **snapshot** of its title (so the line still reads after an edit, and listing needs no
+join), the actor as a `UserSummary`, `read_at` and `created_at`; the client phrases it.
+
+- **`GET /notifications?unread=true|false&limit&offset`** — newest first; `NotificationPage` is a
+  `Page` plus `unread_count`, the caller's unread total over every row (not only the page or the
+  filter), so one round trip serves both the badge and the list.
+- **`POST /notifications/read-all`** — every unread row becomes read; `204` even when there was
+  nothing to do.
+- **`POST /notifications/{id}/read`** — idempotent; a second call keeps the first `read_at`.
+
+The client polls I20 once a minute while the tab is visible and on focus. **Decision D9:** poll
+rather than push — WebSockets need API Gateway, which is not in the Terraform, and a one-minute lag
+on an internal ticketing tool costs nothing.
+
 Both feed the admin overview on the landing page (T124). The "Download CSV" beside the list is
 the ordinary list (I2) walked page by page under its current filters; `created_from` /
 `created_to` on I2 use the same inclusive UTC dates as the reports, for a client that wants
@@ -637,6 +671,7 @@ schema test exempts it explicitly, with a justification.
 | `EscalationCreate`, `EscalationDecision`, `EscalationOut`, `EscalationFilters` | I11–I14 |
 | `ReportRange`, `SlaParams`, `VolumeParams` (`from`/`to` on the wire) | I15–I17 |
 | `SummaryReport`, `SlaReport`, `VolumeReport`, `CountBucket`, `SlaRow`, `SlaTarget`, `VolumeRow` | I15–I17 |
+| `NotificationOut`, `NotificationPage` (`Page` + `unread_count`), `NotificationFilters` — T125, with the `notifications` table (migration `c49f04286e46`) | I20–I22 |
 
 SLA targets and the report range bounds live in `acme_core/reporting.py`, not in a schema. `IncidentNote`,
 `IncidentStatusHistory` and `EscalationRequest` gained the `author`, `actor`, `requested_by` and
@@ -672,6 +707,7 @@ resolves them from a cached lookup instead of every incident row repeating build
 | D6 | Engineer visibility of unassigned work | Keep admin triage; do not widen scoping | Add a pick-up queue |
 | D7 | Priority at creation | Reporter may set it; only admin changes it later | Force `Medium` |
 | D8 | SLA targets | 4 h / 24 h / 3 d / 7 d constants | Configurable per category (needs a table) |
+| D9 | Notification delivery | In-app rows, polled once a minute | Email (no sender configured) or WebSockets (needs API Gateway) |
 
 ## 8. Totals
 
@@ -679,5 +715,5 @@ resolves them from a cached lookup instead of every incident row repeating build
 |---|---|---|
 | `auth` | 12 | 4 |
 | `facilities` | 23 | 4 |
-| `incidents` | 17 | 4 |
-| **Total** | **52** | **12** |
+| `incidents` | 22 | 4 |
+| **Total** | **57** | **12** |
