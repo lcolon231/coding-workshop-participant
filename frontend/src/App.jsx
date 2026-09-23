@@ -13,6 +13,7 @@ import IncidentsPage from './pages/IncidentsPage'
 import LoginPage from './pages/LoginPage'
 import NewIncidentPage from './pages/NewIncidentPage'
 import RegisterPage from './pages/RegisterPage'
+import ReportsPage from './pages/ReportsPage'
 import UsersPage from './pages/UsersPage'
 
 const ADMIN = ['Facility Admin']
@@ -96,6 +97,14 @@ export default function App() {
           element={
             <RequireRole roles={ADMIN}>
               <FacilitiesPage />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="reports"
+          element={
+            <RequireRole roles={ADMIN}>
+              <ReportsPage />
             </RequireRole>
           }
         />

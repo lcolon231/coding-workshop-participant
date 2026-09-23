@@ -17,10 +17,10 @@ are placed in the phase where they belong.
 | 2 | `auth` service | 16 / 16 |
 | 3 | `incidents` service | 15 / 16 |
 | 4 | `facilities` service | 9 / 10 |
-| 5 | Frontend | 10 / 24 |
+| 5 | Frontend | 13 / 24 |
 | 6 | Cloud, CI and operations | 3 / 14 |
 | 7 | Documentation and handover | 0 / 7 |
-| | **Total** | **68 / 122** |
+| | **Total** | **71 / 122** |
 
 ---
 
@@ -133,9 +133,9 @@ Currently one line of work is allocated. **Roughly 2.5 of the rubric's 5 compete
 - [x] **T84** Incident detail — notes, history timeline, internal notes hidden for employees. *(`pages/IncidentPage.jsx`: notes with a staff-only visibility toggle, history, details with facility names resolved when the facilities service answers, escalation requests, admin triage of assignee and priority through `PUT`; 404 and per-section failures handled; 8 tests)*
 - [x] **T85** Incident create form — building/floor/seat cascade, client validation before submit. *(`pages/NewIncidentPage.jsx` against api.md §3; written before the facilities service (T65-T71) landed, against the same contract; 5 tests)*
 - [x] **T86** Transition controls driven by the workflow — only legal actions rendered, required fields prompted. *(driven by `allowed_transitions` on the incident, the per-incident answer api.md I3 prescribes for the UI; `TransitionDialog` prompts for exactly `requires`, engineers self-assign, admins choose from active engineers)*
-- [ ] **T87** Admin screens — user management, role assignment.
-- [ ] **T88** Facilities management screens.
-- [ ] **T89** Reporting dashboard — SLA and volume charts.
+- [x] **T87** Admin screens — user management, role assignment. *(`pages/UsersPage.jsx` behind `RequireRole`; filters and page in the URL, one dialog creates or edits, creating is the only place a role is chosen, editing sends only what changed and shows the role-specific field the API requires; the signed-in admin cannot change their own role or deactivate themselves; deactivation confirms and shows the "open assignments" 409 inline; 10 tests)*
+- [x] **T88** Facilities management screens. *(`pages/FacilitiesPage.jsx`: buildings → floors → seats side by side above `md` and one at a time below, selection and "Show retired" in the URL; row menus edit, retire or restore, and delete with the API's "still referenced" refusal shown inline; categories as the two-level tree; engineer profiles with load against maximum; one generic `RecordDialog` for every record; 8 tests)*
+- [x] **T89** Reporting dashboard — SLA and volume charts. *(`pages/ReportsPage.jsx` over I15–I17: range presets, dates and building in the URL; KPI tiles and one-hue bar lists from the summary, an SLA table with within-target meters and the D8 targets, and a stacked-column volume chart drawn as inline SVG with fixed colour slots, legend, hover and keyboard tooltip, and a table view; each report loads and retries on its own; no chart library added; 7 tests)*
 - [ ] **T90** Responsive behaviour via React Responsive; verify at mobile, tablet, desktop.
 - [ ] **T91** Accessibility — labels, focus order, keyboard navigation, contrast, ARIA on dynamic regions.
 - [ ] **T92** Consistent loading / success / failure feedback across every mutation.
