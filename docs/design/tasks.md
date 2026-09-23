@@ -152,7 +152,7 @@ Currently one line of work is allocated. **Roughly 2.5 of the rubric's 5 compete
 ## Phase 6 — Cloud, CI and operations
 
 - [ ] **T99** First AWS deploy of the `auth` service; record `Max Memory Used`, cold start and Aurora resume in NOTES.md.
-- [ ] **T100** `make migrate-cloud` against Aurora.
+- [x] **T100** `make migrate-cloud` against Aurora. *(2026-09-23: Aurora stamped at `c49f04286e46`; the first invoke times out while a paused cluster resumes, the second connects)*
 - [ ] **T101** `make seed-cloud` with a payload-supplied password.
 - [ ] **T102** Characterise the CloudFront 404 rewrite empirically; confirm whether it caches.
 - [ ] **T103** Verify `/api/auth/docs` is reachable through CloudFront.

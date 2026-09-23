@@ -152,6 +152,31 @@ resource "aws_s3_bucket_policy" "this" {
             )
           }
         }
+      },
+      # Without ListBucket, S3 answers 403 rather than 404 for a key that does
+      # not exist, so a client-side route opened directly (/login, or a refresh
+      # on any page) reached the visitor as an AccessDenied XML document. With
+      # it, S3 says 404 and the distribution's existing 404 rewrite serves the
+      # app, which then routes the path itself. A distribution-wide 403 rewrite
+      # would have done the same but also swallowed the API's own 403 answers.
+      {
+        Sid    = "AllowCloudFrontListForNotFound"
+        Effect = "Allow"
+        Principal = {
+          Service = data.aws_service_principal.cloudfront.name
+        }
+        Action   = "s3:ListBucket"
+        Resource = aws_s3_bucket.this.arn
+        Condition = {
+          StringEquals = {
+            "AWS:SourceArn" = format(
+              "arn:%s:cloudfront::%s:distribution/%s",
+              data.aws_partition.this.partition,
+              data.aws_caller_identity.this.account_id,
+              element(aws_cloudfront_distribution.this.*.id, count.index)
+            )
+          }
+        }
       }
     ]
   })
