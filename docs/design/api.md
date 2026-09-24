@@ -576,6 +576,10 @@ An escalation is a request to raise an incident's priority, decided by an admin.
   escalation (one at a time).
 - **List for an incident (I11)** — anyone who can see the incident.
 - **Admin queue (I13)** — all escalations, filter `status` (default `Pending`), oldest first.
+  Each `EscalationOut` carries `incident_title`, `incident_status` and `incident_priority` as they
+  are **now** (properties on the model read through the eager-loaded incident), so the queue page
+  names and ranks each request without a fetch per incident, and an approval is visible on the
+  row (T128).
 - **Decide (I14)** `{decision: "Approved" | "Rejected", decision_note?}`.
   Approval raises priority **one level** (Low → Medium → High → Critical) in the same transaction and
   stamps `decided_by_id` / `decided_at`. Deciding an already-decided escalation → `409`.
@@ -614,13 +618,17 @@ In-app only: nothing leaves the platform, since no mail or push channel exists i
 A `notifications` row is written **in the same transaction** as the action it announces, so a
 notification can never describe a change that rolled back, and a change cannot commit without it.
 
-Two events produce one:
+Four events produce one:
 
 - **`Reported`** — `POST /api/incidents` (I1) writes one row per **active Facility Admin**, except
   the reporter when they are an admin themselves.
 - **`Assigned`** — a change of hands through `PUT` (I4) or a transition carrying `assignee_id` (I6)
   writes one row for the **new** assignee. Re-saving the same assignee says nothing new. A refused
   assignment (inactive engineer, 400) leaves no row, because the whole request rolls back.
+- **`Resolved`** and **`Closed`** (T129, migration `d7a1c3e5f209`) — a transition into either
+  status writes one row for the **reporter**, unless the reporter took the step themselves (a
+  reporter who confirms and closes already knows). This is the reporter's half of the loop: they
+  are told the outcome without polling the incident, and the bell now shows for every role.
 
 The recipient is the only reader. Every query filters on the caller's id before anything else, so
 someone else's notification is `404`, never `403` (§1.5). `NotificationOut` carries the kind, the

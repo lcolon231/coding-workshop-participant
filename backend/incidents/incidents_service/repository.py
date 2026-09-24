@@ -91,6 +91,7 @@ _INCIDENT_SORTS: Mapping[str, ColumnElement[Any]] = {
 # query per page rather than one per row (T118).
 _INCIDENT_LOADS = (selectinload(Incident.reporter), selectinload(Incident.assignee))
 _ESCALATION_LOADS = (
+    selectinload(EscalationRequest.incident),
     selectinload(EscalationRequest.requested_by),
     selectinload(EscalationRequest.decided_by),
 )
@@ -316,7 +317,7 @@ def get_escalation_for_update(
         scope_incidents(
             select(EscalationRequest)
             .join(Incident, EscalationRequest.incident_id == Incident.id)
-            .options(*_ESCALATION_LOADS, selectinload(EscalationRequest.incident)),
+            .options(*_ESCALATION_LOADS),
             principal,
         )
         .where(EscalationRequest.id == escalation_id)

@@ -15,7 +15,6 @@ import Typography from '@mui/material/Typography'
 import { Plus, SignOut } from '@phosphor-icons/react'
 import { useAuth } from '../auth/AuthContext'
 import { initials } from '../lib/format'
-import { isStaff } from '../lib/incidents'
 import NotificationBell from './NotificationBell'
 import SkipLink from './SkipLink'
 import ThemeToggle from './ThemeToggle'
@@ -25,6 +24,7 @@ const ADMIN = ['Facility Admin']
 /** Links without `roles` show for everyone; the rest only for the roles listed. */
 const NAV = [
   { to: '/', label: 'Incidents', end: true },
+  { to: '/escalations', label: 'Escalations', roles: ADMIN },
   { to: '/users', label: 'Users', roles: ADMIN },
   { to: '/facilities', label: 'Facilities', roles: ADMIN },
   { to: '/reports', label: 'Reports', roles: ADMIN },
@@ -91,11 +91,12 @@ function UserMenu({ user, onSignOut }) {
 
 /**
  * The signed-in frame: one 64px bar with the wordmark, the primary links,
- * the report action, the notification bell for staff (employees are never
- * notified, so they get no bell) and the account menu, over a contained page.
+ * the report action, the notification bell (admins hear about reports,
+ * engineers about assignments, reporters about outcomes) and the account
+ * menu, over a contained page.
  *
  * The bar never wraps: on phones the report action becomes an icon button,
- * the wordmark shortens, and an admin's four links scroll sideways rather
+ * the wordmark shortens, and an admin's five links scroll sideways rather
  * than squeezing.
  */
 export default function AppShell() {
@@ -238,7 +239,7 @@ export default function AppShell() {
           </IconButton>
 
           <ThemeToggle />
-          {isStaff(user) && <NotificationBell />}
+          <NotificationBell />
           <UserMenu user={user} onSignOut={signOut} />
         </Toolbar>
       </AppBar>

@@ -43,3 +43,16 @@ export function listIncidentEscalations(id, params = {}) {
 export function requestEscalation(id, reason) {
   return authedRequest(`${BASE}/${id}/escalations`, { method: 'POST', body: { reason } })
 }
+
+/** The admin queue: every escalation with the given status (Pending by default), oldest first. */
+export function listEscalationQueue(params = {}) {
+  return authedRequest(withQuery(`${BASE}/escalations`, { limit: 50, ...params }))
+}
+
+/** Approve or reject one escalation. Approval raises the incident's priority one level. */
+export function decideEscalation(id, { decision, decision_note }) {
+  return authedRequest(`${BASE}/escalations/${id}/decision`, {
+    method: 'POST',
+    body: { decision, decision_note: decision_note || null },
+  })
+}

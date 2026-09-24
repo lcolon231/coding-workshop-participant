@@ -20,6 +20,10 @@ export function describeNotification({ kind, actor, incident_title: title }) {
       return name ? `${name} assigned you ${quoted}` : `You were assigned ${quoted}`
     case 'Reported':
       return name ? `${name} reported ${quoted}` : `New incident: ${quoted}`
+    case 'Resolved':
+      return name ? `${name} resolved ${quoted}` : `${quoted} was resolved`
+    case 'Closed':
+      return name ? `${name} closed ${quoted}` : `${quoted} was closed`
     default:
       return quoted
   }

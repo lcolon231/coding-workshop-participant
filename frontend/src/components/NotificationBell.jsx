@@ -22,8 +22,9 @@ const EMPTY = { items: [], unreadCount: 0 }
 /**
  * The bell in the app bar: an unread badge and a menu of recent notifications.
  *
- * Engineers are told when an incident is assigned to them; admins when one is
- * reported. The list is polled while the tab is visible and refreshed when it
+ * Engineers are told when an incident is assigned to them, admins when one is
+ * reported, and reporters when theirs is resolved or closed by someone else.
+ * The list is polled while the tab is visible and refreshed when it
  * regains focus, which is as close to live as a Lambda behind CloudFront
  * gets. A failed poll keeps whatever was last shown: a stale badge is better
  * than a flickering one, and the next poll will correct it.

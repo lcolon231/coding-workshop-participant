@@ -64,8 +64,12 @@ class NotificationKind(StrEnum):
     """Why a user is being told about an incident.
 
     `ASSIGNED` goes to the engineer an incident was just assigned to;
-    `REPORTED` goes to every active Facility Admin when one is filed.
+    `REPORTED` goes to every active Facility Admin when one is filed;
+    `RESOLVED` and `CLOSED` go to the reporter when someone else moves
+    their incident there, so the loop closes without them polling the page.
     """
 
     ASSIGNED = "Assigned"
     REPORTED = "Reported"
+    RESOLVED = "Resolved"
+    CLOSED = "Closed"

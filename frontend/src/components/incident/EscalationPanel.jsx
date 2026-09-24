@@ -9,6 +9,7 @@ import DialogTitle from '@mui/material/DialogTitle'
 import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
 import Field from '../Field'
+import EscalationDecisionDialog from './EscalationDecisionDialog'
 import { formatDateTime } from '../../lib/format'
 import { ApiError } from '../../services/api'
 
@@ -22,10 +23,12 @@ function outcome(item) {
  *
  * `canRequest` is decided by the page from the same rules the API applies:
  * reporter or assignee, incident still active, not already Critical, none
- * pending.
+ * pending. `canDecide` is the admin's side: a pending request gets Approve
+ * and Reject, each confirmed in a dialog that takes an optional note.
  */
-export default function EscalationPanel({ escalations, canRequest, onRequest }) {
+export default function EscalationPanel({ escalations, canRequest, onRequest, canDecide, onDecide }) {
   const [open, setOpen] = useState(false)
+  const [deciding, setDeciding] = useState(null)
   const [reason, setReason] = useState('')
   const [fieldError, setFieldError] = useState(null)
   const [formError, setFormError] = useState(null)
@@ -59,6 +62,7 @@ export default function EscalationPanel({ escalations, canRequest, onRequest }) 
   }
 
   if (escalations.length === 0 && !canRequest) return null
+  const decidable = canDecide ? escalations.filter((item) => item.status === 'Pending') : []
 
   return (
     <Stack component="section" aria-labelledby="escalation-heading" spacing={1.5}>
@@ -78,6 +82,25 @@ export default function EscalationPanel({ escalations, canRequest, onRequest }) 
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
               {item.decision_note}
             </Typography>
+          )}
+          {decidable.includes(item) && (
+            <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+              <Button
+                variant="contained"
+                size="small"
+                onClick={() => setDeciding({ item, decision: 'Approved' })}
+              >
+                Approve
+              </Button>
+              <Button
+                variant="outlined"
+                color="error"
+                size="small"
+                onClick={() => setDeciding({ item, decision: 'Rejected' })}
+              >
+                Reject
+              </Button>
+            </Stack>
           )}
         </Box>
       ))}
@@ -123,6 +146,17 @@ export default function EscalationPanel({ escalations, canRequest, onRequest }) 
           </DialogActions>
         </form>
       </Dialog>
+
+      <EscalationDecisionDialog
+        open={deciding !== null}
+        escalation={deciding?.item}
+        decision={deciding?.decision}
+        onClose={() => setDeciding(null)}
+        onSubmit={async (note) => {
+          await onDecide(deciding.item, deciding.decision, note)
+          setDeciding(null)
+        }}
+      />
     </Stack>
   )
 }

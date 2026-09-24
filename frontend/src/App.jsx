@@ -17,6 +17,7 @@ import LandingPage from './pages/LandingPage'
 import LoginPage from './pages/LoginPage'
 import NewIncidentPage from './pages/NewIncidentPage'
 import RegisterPage from './pages/RegisterPage'
+import EscalationsPage from './pages/EscalationsPage'
 import ReportsPage from './pages/ReportsPage'
 import UsersPage from './pages/UsersPage'
 
@@ -94,6 +95,14 @@ export default function App() {
           <Route path="incidents" element={<Navigate to="/" replace />} />
           <Route path="incidents/new" element={<NewIncidentPage />} />
           <Route path="incidents/:incidentId" element={<IncidentPage />} />
+          <Route
+            path="escalations"
+            element={
+              <RequireRole roles={ADMIN}>
+                <EscalationsPage />
+              </RequireRole>
+            }
+          />
           <Route
             path="users"
             element={

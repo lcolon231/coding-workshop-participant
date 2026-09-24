@@ -31,8 +31,8 @@ jobs:
       - name: Test
         run: npm test --prefix ./frontend
 
-      # No threshold yet: T96 sets the ratchet from a measured number
-      # (84.77% statements on 2026-09-22).
+      # Fails below the thresholds in frontend/vite.config.js (80% statements,
+      # lines and functions, 75% branches), set by T96 from a measured number.
       - name: Test with coverage
         run: npm run test:coverage --prefix ./frontend
 

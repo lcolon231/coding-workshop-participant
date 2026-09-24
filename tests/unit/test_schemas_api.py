@@ -407,9 +407,11 @@ class TestEscalations:
 
     def test_out_embeds_requester_and_decider(self) -> None:
         requester, admin = user(), user(Role.FACILITY_ADMIN, "Ada Admin")
+        parent = incident(title="Flooded row", priority=Priority.HIGH)
         row = EscalationRequest(
             id=uuid.uuid4(),
-            incident_id=uuid.uuid4(),
+            incident_id=parent.id,
+            incident=parent,
             requested_by_id=requester.id,
             requested_by=requester,
             reason="Flooding",
@@ -422,6 +424,10 @@ class TestEscalations:
         )
         out = schemas.EscalationOut.model_validate(row)
         assert out.decided_by is not None and out.decided_by.full_name == "Ada Admin"
+        # The incident's facts ride along for the queue, read through the relationship.
+        assert (out.incident_title, out.incident_status, out.incident_priority) == (
+            "Flooded row", IncidentStatus.OPEN, Priority.HIGH
+        )
 
 
 class TestReportRange:

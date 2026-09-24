@@ -52,7 +52,7 @@ are placed in the phase where they belong.
 - [x] **T20** Alembic (also adds the migrations-pending check to `/readyz`, deferred from T12): `env.py`, `script.py.mako`, `alembic.ini` above `acme_core/`, `db/migrate.py` building `Config` programmatically (`%`→`%%`).
 - [x] **T21** `0001_initial` migration; review generated DDL by hand.
 - [x] **T22** `tests/integration/conftest.py` — throwaway `acme_test_<pid>`, real `upgrade_head()`, savepoint rollback, `verify_session`, stale-DB sweep, correct dispose ordering.
-- [x] **T23** `test_migrations.py` — upgrade → **downgrade base → upgrade**; **no pending autogenerate diff**; 12 tables; naming convention applied.
+- [x] **T23** `test_migrations.py` — upgrade → **downgrade base → upgrade**; **no pending autogenerate diff**; 13 tables; naming convention applied.
 - [x] **T24** `test_model_constraints.py` — uniqueness, dangling FKs, stamp defaults NULL, enum round-trip.
 - [x] **T25** `workflow.py` — `TransitionRule`, 7-edge `TRANSITIONS`, `actors_for`, `validate_transition` (edge → actor → fields), `allowed_targets`, **per-field** `STAMP_ON_ENTER`.
 - [x] **T26** Workflow tests — hand-written oracle, 300-cell cross product, `actors_for` oracle, admin bypass pair, required fields incl. whitespace-only, `allowed_targets`, stamps incl. reopen.
@@ -185,7 +185,7 @@ Do not advance past these.
 
 | Gate | Condition |
 |---|---|
-| G1 | `make migrate` builds 12 tables locally *(after T21)* |
+| G1 | `make migrate` builds 13 tables locally *(after T21)* |
 | G2 | All acceptance curls pass against uvicorn *(after T47)* |
 | G3 | The same curls pass against CloudFront **and memory is measured** *(after T99)* |
 | G4 | `make cov` ≥ 80% backend *(after T60)* |

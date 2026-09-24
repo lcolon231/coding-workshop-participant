@@ -30,8 +30,9 @@ export default defineConfig({
       exclude: ['src/main.jsx', 'src/test/**', 'src/**/*.test.{js,jsx}'],
       reporter: ['text', 'html'],
       reportsDirectory: './coverage',
-      // The rubric asks for 80%. Measured 85.9% statements, 79.9% branches on
-      // 2026-09-23 (T96); `test:coverage` fails in CI below these.
+      // The rubric asks for 80%. Measured 88.0% statements, 81.0% branches on
+      // 2026-09-23 (T96, re-measured after T127–T130); `test:coverage` fails
+      // in CI below these.
       thresholds: { statements: 80, lines: 80, functions: 80, branches: 75 },
     },
   },

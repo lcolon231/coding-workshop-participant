@@ -4,6 +4,7 @@ import { axe } from 'vitest-axe'
 import * as matchers from 'vitest-axe/matchers'
 import { vi } from 'vitest'
 import AppShell from '../components/AppShell'
+import EscalationsPage from '../pages/EscalationsPage'
 import FacilitiesPage from '../pages/FacilitiesPage'
 import IncidentPage from '../pages/IncidentPage'
 import IncidentsPage from '../pages/IncidentsPage'
@@ -128,6 +129,14 @@ describe('accessibility (axe)', () => {
     stubApi([['GET', '/api/auth/users', () => jsonResponse(200, page([userFixture(), userFixture({ id: 'u-admin', email: 'admin@acme.inc', role: 'Facility Admin', occupation: null })]))]])
     const { container } = renderSignedIn(<UsersPage />, { path: '/users', user: ADMIN })
     await screen.findByText('Showing 1 to 2 of 2')
+    await expectClean(container)
+  })
+
+  it('escalation queue', async () => {
+    signIn()
+    stubApi([['GET', '/api/incidents/escalations', () => jsonResponse(200, page([{ id: 'e-1', incident_id: 'inc-1', incident_title: 'Aircon dripping', incident_status: 'Open', incident_priority: 'Low', requested_by: EMPLOYEE, reason: 'The whole row cannot work.', status: 'Pending', decided_by: null, decided_at: null, decision_note: null, created_at: '2026-09-22T11:00:00Z' }]))]])
+    const { container } = renderSignedIn(<EscalationsPage />, { path: '/escalations', user: ADMIN })
+    await screen.findByRole('button', { name: 'Approve' })
     await expectClean(container)
   })
 

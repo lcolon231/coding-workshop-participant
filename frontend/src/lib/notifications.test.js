@@ -25,6 +25,22 @@ describe('describeNotification', () => {
     )
   })
 
+  it('tells the reporter about the outcome', () => {
+    const engineer = { full_name: 'Hank Vance' }
+    expect(describeNotification({ kind: 'Resolved', actor: engineer, incident_title: 'Leak' })).toBe(
+      'Hank Vance resolved “Leak”',
+    )
+    expect(describeNotification({ kind: 'Closed', actor, incident_title: 'Leak' })).toBe(
+      'Ada Admin closed “Leak”',
+    )
+    expect(describeNotification({ kind: 'Resolved', actor: null, incident_title: 'Leak' })).toBe(
+      '“Leak” was resolved',
+    )
+    expect(describeNotification({ kind: 'Closed', actor: null, incident_title: 'Leak' })).toBe(
+      '“Leak” was closed',
+    )
+  })
+
   it('falls back to the title for a kind it does not know', () => {
     expect(describeNotification({ kind: 'Other', actor, incident_title: 'Leak' })).toBe('“Leak”')
   })

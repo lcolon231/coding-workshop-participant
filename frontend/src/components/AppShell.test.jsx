@@ -9,6 +9,7 @@ describe('AppShell', () => {
     const nav = screen.getByRole('navigation', { name: 'Primary' })
     expect(within(nav).getAllByRole('link').map((link) => link.textContent)).toEqual([
       'Incidents',
+      'Escalations',
       'Users',
       'Facilities',
       'Reports',
@@ -22,14 +23,12 @@ describe('AppShell', () => {
     expect(within(nav).getAllByRole('link').map((link) => link.textContent)).toEqual(['Incidents'])
   })
 
-  it('gives staff a notification bell and employees none', () => {
-    renderSignedIn(<AppShell />, { path: '/', user: ENGINEER })
-    expect(screen.getByRole('button', { name: 'Notifications' })).toBeInTheDocument()
-  })
-
-  it('shows no bell to an employee, who is never notified', () => {
-    renderSignedIn(<AppShell />, { path: '/', user: EMPLOYEE })
-    expect(screen.queryByRole('button', { name: /Notifications/ })).not.toBeInTheDocument()
+  it('gives everyone a notification bell, since reporters hear about outcomes too', () => {
+    for (const user of [ENGINEER, EMPLOYEE]) {
+      const { unmount } = renderSignedIn(<AppShell />, { path: '/', user })
+      expect(screen.getByRole('button', { name: 'Notifications' })).toBeInTheDocument()
+      unmount()
+    }
   })
 
   it('starts with a skip link that targets the main landmark', () => {

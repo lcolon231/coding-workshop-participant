@@ -234,6 +234,44 @@ describe('IncidentPage', () => {
     })
   })
 
+  it('lets an admin approve a pending escalation from the incident', async () => {
+    const pending = { id: 'e-1', incident_id: 'inc-1', incident_title: 'Aircon dripping on desk 3-14', incident_status: 'Open', incident_priority: 'Medium', requested_by: EMPLOYEE, reason: 'The whole row cannot work.', status: 'Pending', decided_by: null, decided_at: null, decision_note: null, created_at: '2026-09-22T11:00:00Z' }
+    let escalations = [pending]
+    // Listed before the defaults: the stub answers with the first matching route.
+    const fetch = stubApi([
+      ['GET', '/api/incidents/inc-1/escalations', () => jsonResponse(200, page(escalations))],
+      ['POST', '/api/incidents/escalations/e-1/decision', ({ body }) => {
+        escalations = [{ ...pending, status: body.decision, decided_by: ADMIN, decision_note: body.decision_note, incident_priority: 'High' }]
+        return jsonResponse(200, escalations[0])
+      }],
+      ...routes(incidentFixture()),
+    ])
+    renderDetail(ADMIN)
+
+    expect(await screen.findByText('Awaiting an admin decision')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Request escalation' })).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Approve' }))
+    const dialog = within(screen.getByRole('dialog', { name: 'Approve escalation' }))
+    await userEvent.click(dialog.getByRole('button', { name: 'Approve' }))
+
+    expect(await screen.findByRole('status')).toHaveTextContent('Escalation approved. Priority is now High.')
+    const post = fetch.mock.calls.find(([, init]) => init?.method === 'POST')
+    expect(JSON.parse(post[1].body)).toEqual({ decision: 'Approved', decision_note: null })
+    expect(await screen.findByText('Approved by Ada Admin')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument()
+  })
+
+  it('shows a pending escalation to its reporter without decision buttons', async () => {
+    stubApi([
+      ['GET', '/api/incidents/inc-1/escalations', () => jsonResponse(200, page([{ id: 'e-1', incident_id: 'inc-1', requested_by: EMPLOYEE, reason: 'Still leaking.', status: 'Pending', decided_by: null, decided_at: null, decision_note: null, created_at: '2026-09-22T11:00:00Z' }]))],
+      ...routes(incidentFixture()),
+    ])
+    renderDetail(EMPLOYEE)
+    expect(await screen.findByText('Awaiting an admin decision')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Request escalation' })).not.toBeInTheDocument()
+  })
+
   it('says when an incident cannot be found', async () => {
     stubApi([['GET', '/api/incidents/inc-1', () => jsonResponse(404, { error: 'not_found', message: 'Incident not found.' })]])
     renderDetail()
