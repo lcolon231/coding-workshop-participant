@@ -17,6 +17,14 @@ import { createIncident } from '../services/incidents'
 const FIELDS = ['title', 'description', 'priority', 'category_id', 'building_id', 'floor_id', 'seat_id']
 const TITLE_MAX = 200
 
+const SECTION_HEADING = {
+  fontSize: '0.8125rem',
+  fontWeight: 600,
+  letterSpacing: '0.04em',
+  textTransform: 'uppercase',
+  color: 'text.secondary',
+}
+
 const EMPTY = {
   title: '',
   description: '',
@@ -154,147 +162,174 @@ export default function NewIncidentPage() {
       : undefined
 
   return (
-    <Box sx={{ maxWidth: 640 }}>
-      <Typography component="h1" variant="h1" sx={{ mb: 1 }}>
+    <Box sx={{ maxWidth: 1040 }}>
+      <Typography component="h1" variant="h1" sx={{ mb: 0.5 }}>
         Report an incident
       </Typography>
-      <Typography color="text.secondary" sx={{ mb: 4 }}>
+      <Typography color="text.secondary" sx={{ mb: 2.5 }}>
         Say what is wrong and where it is. A facility admin will assign an engineer.
       </Typography>
 
-      <Stack component="form" noValidate onSubmit={handleSubmit} aria-busy={submitting} spacing={3}>
+      <Stack component="form" noValidate onSubmit={handleSubmit} aria-busy={submitting} spacing={2.5}>
         {formError && <Alert severity="error">{formError}</Alert>}
 
-        <Field
-          id="title"
-          label="Title"
-          autoFocus
-          value={values.title}
-          onChange={handleChange}
-          error={fieldErrors.title}
-          helperText="One line, like a subject: what and where."
-          inputAttributes={{ maxLength: TITLE_MAX }}
-        />
-        <Field
-          id="description"
-          label="Description"
-          multiline
-          minRows={4}
-          value={values.description}
-          onChange={handleChange}
-          error={fieldErrors.description}
-          helperText="What you noticed, since when, and anything that helps find it."
-        />
-        <SelectField
-          id="priority"
-          label="Priority"
-          value={values.priority}
-          onChange={handleChange}
-          error={fieldErrors.priority}
-          helperText="Your view of the urgency. Admins can adjust it later."
+        {/*
+          Two columns on a desktop so the whole form sits above the fold: what
+          happened on the left, where it is on the right. One column on a
+          phone, in the same reading order.
+        */}
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'minmax(0, 3fr) minmax(0, 2fr)' },
+            columnGap: 6,
+            rowGap: 2.5,
+            alignItems: 'start',
+          }}
         >
-          {PRIORITIES.map((priority) => (
-            <option key={priority} value={priority}>
-              {priority}
-            </option>
-          ))}
-        </SelectField>
-        <SelectField
-          id="category_id"
-          label="Category"
-          value={values.category_id}
-          onChange={handleChange}
-          error={fieldErrors.category_id}
-          disabled={categories.items === null || Boolean(categories.error)}
-          helperText={categories.error ? 'Categories could not be loaded; you can leave this blank.' : 'Optional.'}
-        >
-          <option value="">Not sure</option>
-          {groupCategories(categories.items ?? []).map(({ root, children }) =>
-            children.length === 0 ? (
-              <option key={root.id} value={root.id}>
-                {root.name}
-              </option>
-            ) : (
-              <optgroup key={root.id} label={root.name}>
-                <option value={root.id}>{root.name}</option>
-                {children.map((child) => (
-                  <option key={child.id} value={child.id}>
-                    {child.name}
+          <Stack component="section" aria-labelledby="what-heading" spacing={2.5}>
+            <Typography id="what-heading" component="h2" sx={SECTION_HEADING}>
+              What happened
+            </Typography>
+            <Field
+              id="title"
+              label="Title"
+              autoFocus
+              value={values.title}
+              onChange={handleChange}
+              error={fieldErrors.title}
+              helperText="One line, like a subject: what and where."
+              inputAttributes={{ maxLength: TITLE_MAX }}
+            />
+            <Field
+              id="description"
+              label="Description"
+              multiline
+              minRows={4}
+              value={values.description}
+              onChange={handleChange}
+              error={fieldErrors.description}
+              helperText="What you noticed, since when, and anything that helps find it."
+            />
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+              <SelectField
+                id="priority"
+                label="Priority"
+                value={values.priority}
+                onChange={handleChange}
+                error={fieldErrors.priority}
+                helperText="Admins can adjust it later."
+              >
+                {PRIORITIES.map((priority) => (
+                  <option key={priority} value={priority}>
+                    {priority}
                   </option>
                 ))}
-              </optgroup>
-            ),
-          )}
-        </SelectField>
+              </SelectField>
+              <SelectField
+                id="category_id"
+                label="Category"
+                value={values.category_id}
+                onChange={handleChange}
+                error={fieldErrors.category_id}
+                disabled={categories.items === null || Boolean(categories.error)}
+                helperText={categories.error ? 'Categories could not be loaded; you can leave this blank.' : 'Optional.'}
+              >
+                <option value="">Not sure</option>
+                {groupCategories(categories.items ?? []).map(({ root, children }) =>
+                  children.length === 0 ? (
+                    <option key={root.id} value={root.id}>
+                      {root.name}
+                    </option>
+                  ) : (
+                    <optgroup key={root.id} label={root.name}>
+                      <option value={root.id}>{root.name}</option>
+                      {children.map((child) => (
+                        <option key={child.id} value={child.id}>
+                          {child.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ),
+                )}
+              </SelectField>
+            </Box>
+          </Stack>
 
-        {buildings.error && (
-          <Alert
-            severity="error"
-            action={
-              <Button color="inherit" size="small" onClick={buildings.retry}>
-                Try again
-              </Button>
-            }
-          >
-            Buildings could not be loaded. {buildings.error}
-          </Alert>
-        )}
-        <SelectField
-          id="building_id"
-          label="Building"
-          value={values.building_id}
-          onChange={handleChange}
-          error={fieldErrors.building_id}
-          disabled={buildings.items === null || Boolean(buildings.error)}
-          helperText={buildingHelp}
-        >
-          <option value="">{buildings.items === null ? 'Loading buildings' : 'Choose a building'}</option>
-          {(buildings.items ?? []).map((building) => (
-            <option key={building.id} value={building.id}>
-              {building.code}, {building.name}
-            </option>
-          ))}
-        </SelectField>
-        <SelectField
-          id="floor_id"
-          label="Floor"
-          value={values.floor_id}
-          onChange={handleChange}
-          error={fieldErrors.floor_id}
-          disabled={!values.building_id || floors.items === null}
-          helperText={
-            floors.error
-              ? 'Floors could not be loaded; you can leave this blank.'
-              : 'Optional. A lift or a lobby has no floor.'
-          }
-        >
-          <option value="">{!values.building_id ? 'Choose a building first' : 'Any floor'}</option>
-          {(floors.items ?? []).map((floor) => (
-            <option key={floor.id} value={floor.id}>
-              {floorLabel(floor)}
-            </option>
-          ))}
-        </SelectField>
-        <SelectField
-          id="seat_id"
-          label="Seat"
-          value={values.seat_id}
-          onChange={handleChange}
-          error={fieldErrors.seat_id}
-          disabled={!values.floor_id || seats.items === null}
-          helperText={
-            seats.error ? 'Seats could not be loaded; you can leave this blank.' : 'Optional.'
-          }
-        >
-          <option value="">{!values.floor_id ? 'Choose a floor first' : 'Any seat'}</option>
-          {(seats.items ?? []).map((seat) => (
-            <option key={seat.id} value={seat.id}>
-              {seatLabel(seat)}
-            </option>
-          ))}
-        </SelectField>
+          <Stack component="section" aria-labelledby="where-heading" spacing={2.5}>
+            <Typography id="where-heading" component="h2" sx={SECTION_HEADING}>
+              Where it is
+            </Typography>
+            {buildings.error && (
+              <Alert
+                severity="error"
+                action={
+                  <Button color="inherit" size="small" onClick={buildings.retry}>
+                    Try again
+                  </Button>
+                }
+              >
+                Buildings could not be loaded. {buildings.error}
+              </Alert>
+            )}
+            <SelectField
+              id="building_id"
+              label="Building"
+              value={values.building_id}
+              onChange={handleChange}
+              error={fieldErrors.building_id}
+              disabled={buildings.items === null || Boolean(buildings.error)}
+              helperText={buildingHelp}
+            >
+              <option value="">{buildings.items === null ? 'Loading buildings' : 'Choose a building'}</option>
+              {(buildings.items ?? []).map((building) => (
+                <option key={building.id} value={building.id}>
+                  {building.code}, {building.name}
+                </option>
+              ))}
+            </SelectField>
+            <SelectField
+              id="floor_id"
+              label="Floor"
+              value={values.floor_id}
+              onChange={handleChange}
+              error={fieldErrors.floor_id}
+              disabled={!values.building_id || floors.items === null}
+              helperText={
+                floors.error
+                  ? 'Floors could not be loaded; you can leave this blank.'
+                  : 'Optional. A lift or a lobby has no floor.'
+              }
+            >
+              <option value="">{!values.building_id ? 'Choose a building first' : 'Any floor'}</option>
+              {(floors.items ?? []).map((floor) => (
+                <option key={floor.id} value={floor.id}>
+                  {floorLabel(floor)}
+                </option>
+              ))}
+            </SelectField>
+            <SelectField
+              id="seat_id"
+              label="Seat"
+              value={values.seat_id}
+              onChange={handleChange}
+              error={fieldErrors.seat_id}
+              disabled={!values.floor_id || seats.items === null}
+              helperText={
+                seats.error ? 'Seats could not be loaded; you can leave this blank.' : 'Optional.'
+              }
+            >
+              <option value="">{!values.floor_id ? 'Choose a floor first' : 'Any seat'}</option>
+              {(seats.items ?? []).map((seat) => (
+                <option key={seat.id} value={seat.id}>
+                  {seatLabel(seat)}
+                </option>
+              ))}
+            </SelectField>
+          </Stack>
+        </Box>
 
-        <Stack direction="row" spacing={1.5} sx={{ pt: 1 }}>
+        <Stack direction="row" spacing={1.5} sx={{ pt: 0.5 }}>
           <Button type="submit" variant="contained" size="large" disabled={submitting}>
             {submitting ? 'Submitting…' : 'Submit report'}
           </Button>
