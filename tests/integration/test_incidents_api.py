@@ -1310,6 +1310,25 @@ class TestEscalationQueue:
         assert [e["id"] for e in body["items"]] == pending
         assert body["total"] == 2
 
+    def test_each_row_names_the_incident_as_it_is_now(
+        self, incidents_client: TestClient, actors: Actors, pending: list[str]
+    ) -> None:
+        """The queue is read without a fetch per incident, and reflects an approval."""
+        first = incidents_client.get(f"{P}/escalations", headers=actors.admin).json()["items"][0]
+        assert (first["incident_title"], first["incident_status"], first["incident_priority"]) == (
+            "first", "Open", "Low"
+        )
+        incidents_client.post(
+            f"{P}/escalations/{pending[0]}/decision", json={"decision": "Approved"},
+            headers=actors.admin,
+        )
+        approved = incidents_client.get(
+            f"{P}/escalations", params={"status": "Approved"}, headers=actors.admin
+        ).json()["items"]
+        assert [(e["incident_title"], e["incident_priority"]) for e in approved] == [
+            ("first", "Medium")
+        ]
+
     def test_approval_raises_priority_one_level_and_stamps_the_decision(
         self, incidents_client: TestClient, actors: Actors, world: World, pending: list[str],
         verify_session: Session,
@@ -1773,6 +1792,39 @@ class TestNotifications:
         )
         assert resp.status_code == 200, resp.text
         assert len(notifications_of(verify_session, world.engineer)) == 1
+
+    def test_resolving_tells_the_reporter(
+        self, api: Api, actors: Actors, world: World, verify_session: Session
+    ) -> None:
+        incident = api.resolved(actors)
+        rows = notifications_of(verify_session, world.employee)
+        assert [(r.kind.value, r.actor_id) for r in rows] == [("Resolved", world.engineer.id)]
+        assert str(rows[0].incident_id) == incident["id"]
+        # The admin already heard about the report and nothing since.
+        assert [r.kind.value for r in notifications_of(verify_session, world.admin)] == ["Reported"]
+
+    def test_the_reporter_closing_their_own_incident_tells_nobody(
+        self, api: Api, actors: Actors, world: World, verify_session: Session
+    ) -> None:
+        done = api.resolved(actors)
+        api.moved(actors.employee, done["id"], "Closed")
+        assert [r.kind.value for r in notifications_of(verify_session, world.employee)] == [
+            "Resolved"
+        ]
+        assert [r.kind.value for r in notifications_of(verify_session, world.engineer)] == [
+            "Assigned"
+        ]
+
+    def test_an_admin_closing_tells_the_reporter(
+        self, api: Api, actors: Actors, world: World, verify_session: Session
+    ) -> None:
+        done = api.resolved(actors)
+        api.moved(actors.admin, done["id"], "Closed")
+        rows = notifications_of(verify_session, world.employee)
+        assert [(r.kind.value, r.actor_id) for r in rows] == [
+            ("Resolved", world.engineer.id),
+            ("Closed", world.admin.id),
+        ]
 
     def test_a_failed_assignment_leaves_no_notification(
         self,

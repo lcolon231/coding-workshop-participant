@@ -224,6 +224,38 @@ def _notify_assignee(
     )
 
 
+_OUTCOME_KINDS = {
+    IncidentStatus.RESOLVED: NotificationKind.RESOLVED,
+    IncidentStatus.CLOSED: NotificationKind.CLOSED,
+}
+
+
+def _notify_reporter(
+    session: Session,
+    principal: Principal,
+    incident: Incident,
+    target: IncidentStatus,
+    at: dt.datetime,
+) -> None:
+    """Tell the reporter their incident was resolved or closed.
+
+    Only for the two outcomes a reporter waits on, and only when someone
+    else took the step: a reporter who confirms and closes their own
+    incident already knows.
+    """
+    kind = _OUTCOME_KINDS.get(target)
+    if kind is None or incident.reporter_id == principal.user_id:
+        return
+    repo.add_notification(
+        session,
+        user_id=incident.reporter_id,
+        incident=incident,
+        kind=kind,
+        actor_id=principal.user_id,
+        at=at,
+    )
+
+
 def list_notifications(
     session: Session, principal: Principal, filters: NotificationFilters
 ) -> tuple[list[Notification], int, int]:
@@ -502,6 +534,7 @@ def transition(
     incident.status = target
     session.flush()
     _notify_assignee(session, principal, incident, previous_assignee_id, now)
+    _notify_reporter(session, principal, incident, target, now)
     session.flush()
     _logger.info(
         "incident_transitioned",
