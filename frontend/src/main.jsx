@@ -7,6 +7,7 @@ import '@fontsource-variable/geist'
 import './index.css'
 import { theme } from './theme'
 import AuthProvider from './auth/AuthProvider'
+import ErrorBoundary from './components/ErrorBoundary'
 import App from './App.jsx'
 import { registerServiceWorker } from './pwa'
 
@@ -16,11 +17,13 @@ createRoot(document.getElementById('root')).render(
   <StrictMode>
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <BrowserRouter>
-        <AuthProvider>
-          <App />
-        </AuthProvider>
-      </BrowserRouter>
+      <ErrorBoundary>
+        <BrowserRouter>
+          <AuthProvider>
+            <App />
+          </AuthProvider>
+        </BrowserRouter>
+      </ErrorBoundary>
     </ThemeProvider>
   </StrictMode>,
 )
