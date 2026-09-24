@@ -125,7 +125,7 @@ returns `{items, total, limit, offset}`; every error `{error, message, details[]
 | Backend lint | `make lint` | ruff and bandit, exactly what CI runs | clean |
 | Backend unit + integration | `make cov` | Every endpoint for every role against a throwaway PostgreSQL database it creates, migrates and drops; the 404-not-403 pair on the same id; every workflow edge with its history rows and stamps; model-versus-migration drift | 1741 passed, 99.86 % coverage, ratchet 98 % |
 | Frontend lint | `cd frontend && npm run lint` | ESLint | clean |
-| Frontend unit + component | `cd frontend && npm test` / `npm run test:coverage` | Vitest with React Testing Library against a stubbed API | 190 passed; 88.7 % statements, 81.7 % branches (floors 80 / 75) |
+| Frontend unit + component | `cd frontend && npm test` / `npm run test:coverage` | Vitest with React Testing Library against a stubbed API | 241 passed; 92.7 % statements, 84.3 % branches, 90.9 % functions (floors 90 / 80 / 88) |
 | End to end | `cd frontend && npm run test:e2e` | Playwright drives the real UI against a real backend it starts on its own throwaway database: register, report, assign, block, resolve, close, and the stranger who gets 404 | 4 passed in about 1.5 min |
 
 Results above were measured on 2026-09-24. Both coverage commands write an HTML report next to the

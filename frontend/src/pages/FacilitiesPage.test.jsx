@@ -199,6 +199,39 @@ describe('FacilitiesPage', () => {
     expect(within(child).queryByRole('menuitem', { name: 'Add sub-category' })).not.toBeInTheDocument()
   })
 
+  it('edits a category from its row menu and deletes one after confirming', async () => {
+    const fetch = stubApi([
+      ...baseRoutes(),
+      ['PUT', '/api/facilities/categories/c-hvac', ({ body }) => jsonResponse(200, { ...CATEGORIES[1], ...body })],
+      ['DELETE', '/api/facilities/categories/c-net', () => new Response(null, { status: 204 })],
+    ])
+    renderFacilities({ initialEntries: ['/facilities?tab=categories'] })
+    await screen.findByRole('list', { name: 'Facilities' })
+
+    let menu = await openMenu('HVAC')
+    await userEvent.click(within(menu).getByRole('menuitem', { name: 'Edit' }))
+    let dialog = screen.getByRole('dialog')
+    const name = within(dialog).getByLabelText('Name')
+    expect(name).toHaveValue('HVAC')
+    await userEvent.clear(name)
+    await userEvent.type(name, 'Heating and cooling')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save changes' }))
+    expect(await screen.findByText('Category saved.')).toBeInTheDocument()
+    const put = fetch.mock.calls.find(([, init]) => init?.method === 'PUT')
+    expect(String(put[0])).toBe('/api/facilities/categories/c-hvac')
+    expect(JSON.parse(put[1].body)).toEqual({ name: 'Heating and cooling' })
+
+    menu = await openMenu('Network')
+    await userEvent.click(within(menu).getByRole('menuitem', { name: 'Delete' }))
+    dialog = screen.getByRole('dialog')
+    expect(within(dialog).getByRole('heading', { name: 'Delete Network?' })).toBeInTheDocument()
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Delete' }))
+    expect(await screen.findByText('Network deleted.')).toBeInTheDocument()
+    expect(calls(fetch)).toContain('DELETE /api/facilities/categories/c-net')
+    // The tree reloads after a change.
+    expect(calls(fetch).filter((call) => call === 'GET /api/facilities/categories?limit=100').length).toBeGreaterThanOrEqual(3)
+  })
+
   it('lists engineers with their load and edits a profile', async () => {
     const fetch = stubApi([
       ...baseRoutes(),

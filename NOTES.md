@@ -54,7 +54,7 @@ stated. Numbers are what the log said, not what the design hoped.
 | Tier | Command | Result |
 |---|---|---|
 | Backend unit + integration | `make lint && make cov` | 1716 passed, 36 skipped; 99.83 % coverage against a 98 % ratchet; ruff and bandit clean |
-| Frontend unit + component | `npm run lint && npm run test:coverage` | 153 passed; 88.1 % statements, 81.4 % branches, 84.9 % functions (floors 80 / 75 / 80) |
+| Frontend unit + component | `npm run lint && npm run test:coverage` | 241 passed; 92.7 % statements, 84.3 % branches, 90.9 % functions (floors 90 / 80 / 88) |
 | End to end | `npm run test:e2e` | 4 Playwright specs in about 1.4 min against a throwaway backend it starts itself |
 
 **Cloud latency**
