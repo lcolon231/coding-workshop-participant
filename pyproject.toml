@@ -36,6 +36,8 @@ filterwarnings = [
 xfail_strict = true
 
 [tool.coverage.run]
+# Data file and HTML report live under backend/, next to the code they measure.
+data_file = "backend/coverage/.coverage"
 # Packages, never "backend/auth" -- that directory holds vendored dependencies
 # at build time and would inflate the denominator into meaninglessness.
 source = ["acme_core", "auth_service", "incidents_service", "facilities_service"]
@@ -62,6 +64,9 @@ omit = [
 
 [tool.coverage.paths]
 source = ["backend/_shared/acme_core", "*/backend/_shared/acme_core", "*/acme_core"]
+
+[tool.coverage.html]
+directory = "backend/coverage"
 
 [tool.coverage.report]
 # RATCHET: raised every commit, never introduced at the end. A gate added at
