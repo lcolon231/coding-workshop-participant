@@ -519,8 +519,9 @@ Order of checks, each with its own error, pinned by tests (plan, *Decisions clos
 
 On success, in one transaction: apply the payload, write stamps from `stamps_for` (first-occurrence
 for `acknowledged_at`/`assigned_at`, latest for `resolved_at`/`closed_at`), and append a history row
-whose `note` is the `resolution_note` or `blocked_reason`. Leaving `Blocked` clears `blocked_reason`;
-the history row keeps it.
+whose `note` is the `resolution_note` or `blocked_reason` and whose `assignee` is the engineer the
+move handed the incident to (null when the assignee did not change). Leaving `Blocked` clears
+`blocked_reason`; the history row keeps it.
 
 The legal edges (from `workflow.TRANSITIONS`):
 
@@ -543,7 +544,10 @@ actors and required fields. Static per deploy; the client may cache it for the s
 ### I8 `GET /api/incidents/{incident_id}/history`
 
 → `Page[StatusHistoryOut]`, `sort = created_at`, default **`asc`** (a timeline reads forwards).
-Append-only; there is no write endpoint — rows are produced only by I1 and I6.
+Append-only; there is no write endpoint — rows are produced only by I1, I4 and I6. An assignment
+through I4 (`assignee_id` changed to an engineer, status untouched) writes a row with
+`from_status == to_status` and `assignee` set, so the timeline says which admin handed the incident
+to whom; re-saving the same assignee writes nothing.
 
 ### I9–I10 Notes
 
@@ -588,10 +592,11 @@ stamped timestamps on `incidents` — no window functions, no scan of the histor
   Resolved or Closed) and how many are Critical, busiest first. An outer join from `buildings` with
   the window on the join, so every active building appears even at zero; a retired building only
   while it still has incidents in the window.
-- **`/reports/engineers`** — per engineer: incidents in the window assigned to them now, how many
-  are still open, how many they completed (Resolved or Closed **with** `resolved_at`, so an
-  incident closed without work counts for nobody) and the mean report-to-resolution over those,
-  most completed first. Same outer-join shape: every active engineer appears even idle, a
+- **`/reports/engineers`** — per engineer: their `specialty` (the role from the engineer profile,
+  outer-joined so a profile-less Engineer reads as null), incidents in the window assigned to them
+  now, how many are still open, how many they completed (Resolved or Closed **with** `resolved_at`,
+  so an incident closed without work counts for nobody) and the mean report-to-resolution over
+  those, most completed first. Same outer-join shape: every active engineer appears even idle, a
   deactivated one only while they still hold incidents.
 
 ### I20–I22 Notifications (T125)

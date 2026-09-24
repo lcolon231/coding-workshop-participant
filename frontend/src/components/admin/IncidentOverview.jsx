@@ -13,6 +13,7 @@ import Typography from '@mui/material/Typography'
 import { formatDuration } from '../../lib/format'
 import { RANGE_PRESETS, buildingBars, engineerBars, rangeEnding } from '../../lib/reports'
 import { useLoad } from '../../lib/useLoad'
+import { listEngineers } from '../../services/facilities'
 import { fetchBuildings, fetchEngineers } from '../../services/reports'
 import PieChart from '../charts/PieChart'
 import StackedBars from '../charts/StackedBars'
@@ -29,6 +30,7 @@ function slicesOf(rows, series, slots) {
   return rows.map((row) => ({
     key: row.key,
     label: row.label,
+    role: row.role,
     value: row.total,
     slot: slots.get(row.key),
     detail: series.map((entry) => ({ name: entry.name, value: row.values[entry.name] })),
@@ -63,6 +65,7 @@ function EngineerTable({ rows }) {
       <TableHead>
         <TableRow>
           <TableCell>Engineer</TableCell>
+          <TableCell>Role</TableCell>
           <TableCell align="right">Assigned</TableCell>
           <TableCell align="right">Open</TableCell>
           <TableCell align="right">Completed</TableCell>
@@ -80,6 +83,7 @@ function EngineerTable({ rows }) {
                 </Typography>
               )}
             </TableCell>
+            <TableCell sx={{ color: row.specialty ? 'text.primary' : 'text.secondary' }}>{row.specialty ?? '—'}</TableCell>
             <TableCell align="right">{row.assigned_count}</TableCell>
             <TableCell align="right">{row.open_count}</TableCell>
             <TableCell align="right">{row.completed_count}</TableCell>
@@ -91,6 +95,70 @@ function EngineerTable({ rows }) {
   )
 }
 
+/** The engineers marked available right now, lightest load first. */
+function loadAvailable() {
+  return listEngineers({ is_available: true, sort: 'open_assignments', order: 'asc' })
+}
+
+function AvailableEngineers() {
+  const { data, loading, error, reload } = useLoad(loadAvailable)
+  const items = data?.items ?? null
+
+  return (
+    <Section id="overview-available" title="Available now">
+      {error && (
+        <Box sx={{ mb: 2 }}>
+          <LoadError message={error} onRetry={reload} />
+        </Box>
+      )}
+      {items === null ? (
+        !error && <Skeleton variant="rounded" height={72} />
+      ) : items.length === 0 ? (
+        <EmptyState title="Nobody is available" body="Engineers marked available for new assignments appear here with their role and load." />
+      ) : (
+        <Box
+          component="ul"
+          aria-label="Available engineers"
+          sx={{
+            listStyle: 'none',
+            m: 0,
+            p: 0,
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', sm: 'repeat(auto-fill, minmax(220px, 1fr))' },
+            gap: 1.5,
+            opacity: loading ? 0.6 : 1,
+          }}
+        >
+          {items.map((engineer) => {
+            const full = engineer.open_assignments >= engineer.max_concurrent_incidents
+            return (
+              <Box
+                component="li"
+                key={engineer.user_id}
+                sx={{ px: 1.5, py: 1.25, border: 1, borderColor: 'divider', borderRadius: 1, minWidth: 0 }}
+              >
+                <Typography variant="body2" noWrap sx={{ fontWeight: 500 }}>
+                  {engineer.user.full_name}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" noWrap>
+                  {engineer.specialty}
+                </Typography>
+                <Typography
+                  variant="body2"
+                  sx={{ mt: 0.5, fontVariantNumeric: 'tabular-nums', color: full ? 'warning.main' : 'text.secondary' }}
+                >
+                  {engineer.open_assignments} of {engineer.max_concurrent_incidents} open
+                  {full ? ', at capacity' : ''}
+                </Typography>
+              </Box>
+            )
+          })}
+        </Box>
+      )}
+    </Section>
+  )
+}
+
 /**
  * The admin's view over the list: which buildings generate the incidents,
  * and what each engineer holds and has completed, over the last 7, 30 or
@@ -98,7 +166,11 @@ function EngineerTable({ rows }) {
  *
  * Each chart is a donut of the share per building or engineer, with the
  * finished/open split in the tooltip; the numbers stay reachable through
- * the table views and the workload table.
+ * the table views and the workload table. Engineers carry their role (the
+ * profile's specialty) in the legend, the tooltip and the table.
+ *
+ * Below the engineers sits who is available for new work right now. That
+ * is live, not a report, so it ignores the range.
  */
 export default function IncidentOverview() {
   const [days, setDays] = useState(DEFAULT_DAYS)
@@ -225,6 +297,8 @@ export default function IncidentOverview() {
             </Stack>
           )}
         </Section>
+
+        <AvailableEngineers />
       </Stack>
     </Box>
   )

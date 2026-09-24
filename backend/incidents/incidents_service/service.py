@@ -407,7 +407,20 @@ def update_incident(
     for field, value in changes.items():
         setattr(incident, field, value)
     session.flush()
-    _notify_assignee(session, principal, incident, previous_assignee_id, _now())
+    now = _now()
+    if incident.assignee_id is not None and incident.assignee_id != previous_assignee_id:
+        # The status stays; the row records who handed it to whom, and when.
+        repo.add_history(
+            session,
+            incident,
+            incident.status,
+            incident.status,
+            principal.user_id,
+            None,
+            assignee_id=incident.assignee_id,
+            at=now,
+        )
+    _notify_assignee(session, principal, incident, previous_assignee_id, now)
     session.flush()
     return incident
 
@@ -449,10 +462,16 @@ def transition(
     validate_transition(_context(principal, incident), body.target_status, payload)
     previous_assignee_id = incident.assignee_id
 
+    # Who this move hands the incident to, for the audit row. Read from the
+    # payload: the relationship is set below, and the foreign key follows
+    # only at flush.
+    handed_to = None
     if body.assignee_id is not None:
         if not principal.is_admin:
             raise Forbidden("Only a Facility Admin may assign an incident.")
         incident.assignee = _active_engineer(session, body.assignee_id)
+        if body.assignee_id != previous_assignee_id:
+            handed_to = body.assignee_id
 
     now = _now()
     target = body.target_status
@@ -470,7 +489,16 @@ def transition(
         setattr(incident, field, moment)
 
     note = body.resolution_note or body.blocked_reason
-    repo.add_history(session, incident, incident.status, target, principal.user_id, note, at=now)
+    repo.add_history(
+        session,
+        incident,
+        incident.status,
+        target,
+        principal.user_id,
+        note,
+        assignee_id=handed_to,
+        at=now,
+    )
     incident.status = target
     session.flush()
     _notify_assignee(session, principal, incident, previous_assignee_id, now)
@@ -732,14 +760,22 @@ def engineers_report(session: Session, window: ReportRange) -> EngineersReport:
             EngineerRow(
                 engineer_id=engineer_id,
                 engineer=name,
+                specialty=specialty,
                 is_active=is_active,
                 assigned_count=assigned,
                 open_count=int(open_count),
                 completed_count=int(completed),
                 mean_resolve_seconds=_seconds(mean_resolve),
             )
-            for engineer_id, name, is_active, assigned, open_count, completed, mean_resolve in (
-                repo.engineer_rows(session, window)
-            )
+            for (
+                engineer_id,
+                name,
+                specialty,
+                is_active,
+                assigned,
+                open_count,
+                completed,
+                mean_resolve,
+            ) in repo.engineer_rows(session, window)
         ],
     )

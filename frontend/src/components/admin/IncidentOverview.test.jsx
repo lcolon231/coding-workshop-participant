@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import IncidentOverview from './IncidentOverview'
-import { ADMIN, calls, jsonResponse, renderSignedIn, signIn, stubApi } from '../../test/helpers'
+import { ADMIN, calls, jsonResponse, page, renderSignedIn, signIn, stubApi } from '../../test/helpers'
 
 const BUILDINGS = {
   from: '2026-08-25',
@@ -17,15 +17,35 @@ const ENGINEERS = {
   from: '2026-08-25',
   to: '2026-09-23',
   rows: [
-    { engineer_id: 'u-eng', engineer: 'Hank Vance', is_active: true, assigned_count: 5, open_count: 1, completed_count: 4, mean_resolve_seconds: 8100 },
-    { engineer_id: 'u-eng2', engineer: 'Ida Lupin', is_active: false, assigned_count: 2, open_count: 2, completed_count: 0, mean_resolve_seconds: null },
+    { engineer_id: 'u-eng', engineer: 'Hank Vance', specialty: 'HVAC', is_active: true, assigned_count: 5, open_count: 1, completed_count: 4, mean_resolve_seconds: 8100 },
+    { engineer_id: 'u-eng2', engineer: 'Ida Lupin', specialty: 'Electrical', is_active: false, assigned_count: 2, open_count: 2, completed_count: 0, mean_resolve_seconds: null },
   ],
 }
+
+const AVAILABLE = page([
+  {
+    user_id: 'u-eng3',
+    user: { id: 'u-eng3', full_name: 'Jo Marsh', role: 'Engineer' },
+    specialty: 'Plumbing',
+    max_concurrent_incidents: 5,
+    is_available: true,
+    open_assignments: 0,
+  },
+  {
+    user_id: 'u-eng',
+    user: { id: 'u-eng', full_name: 'Hank Vance', role: 'Engineer' },
+    specialty: 'HVAC',
+    max_concurrent_incidents: 3,
+    is_available: true,
+    open_assignments: 3,
+  },
+])
 
 function routes(overrides = {}) {
   return [
     ['GET', '/api/incidents/reports/buildings', overrides.buildings ?? (() => jsonResponse(200, BUILDINGS))],
     ['GET', '/api/incidents/reports/engineers', overrides.engineers ?? (() => jsonResponse(200, ENGINEERS))],
+    ['GET', '/api/facilities/engineers', overrides.available ?? (() => jsonResponse(200, AVAILABLE))],
   ]
 }
 
@@ -76,25 +96,52 @@ describe('IncidentOverview', () => {
     expect(within(hq).getAllByRole('cell').map((cell) => cell.textContent)).toEqual(['Headquarters', '5', '2', '7', '1'])
   })
 
-  it("charts each engineer's completed and open work, and tables the detail", async () => {
+  it("charts each engineer's completed and open work with their role, and tables the detail", async () => {
     stubApi(routes())
     renderOverview()
 
     const engineers = await screen.findByRole('region', { name: 'Engineers' })
     const chart = await within(engineers).findByRole('img', { name: 'Incidents per engineer, completed and still open' })
     const legend = within(engineers).getByRole('list', { name: 'Slices' })
-    expect(within(legend).getAllByRole('listitem').map((item) => item.textContent)).toEqual(['Hank Vance571%', 'Ida Lupin229%'])
+    expect(within(legend).getAllByRole('listitem').map((item) => item.textContent)).toEqual(['Hank VanceHVAC571%', 'Ida LupinElectrical229%'])
     expect(Array.from(chart.querySelectorAll('path[aria-label]')).map((rect) => rect.getAttribute('aria-label'))).toEqual([
-      'Hank Vance: 5 incidents, 71%',
-      'Ida Lupin: 2 incidents, 29%',
+      'Hank Vance (HVAC): 5 incidents, 71%',
+      'Ida Lupin (Electrical): 2 incidents, 29%',
     ])
 
     await userEvent.click(within(engineers).getByRole('button', { name: 'View as table' }))
     const table = within(engineers).getByRole('table', { name: 'Engineer workload' })
+    expect(within(table).getAllByRole('columnheader').map((cell) => cell.textContent)).toEqual([
+      'Engineer', 'Role', 'Assigned', 'Open', 'Completed', 'Resolved, mean',
+    ])
     const hank = within(table).getByText('Hank Vance').closest('tr')
-    expect(within(hank).getAllByRole('cell').map((cell) => cell.textContent)).toEqual(['Hank Vance', '5', '1', '4', '2h 15m'])
+    expect(within(hank).getAllByRole('cell').map((cell) => cell.textContent)).toEqual(['Hank Vance', 'HVAC', '5', '1', '4', '2h 15m'])
     const ida = within(table).getByText('Ida Lupin').closest('tr')
-    expect(within(ida).getAllByRole('cell').map((cell) => cell.textContent)).toEqual(['Ida LupinDeactivated', '2', '2', '0', '—'])
+    expect(within(ida).getAllByRole('cell').map((cell) => cell.textContent)).toEqual(['Ida LupinDeactivated', 'Electrical', '2', '2', '0', '—'])
+  })
+
+  it('lists who is available right now, with role and load, regardless of the range', async () => {
+    const fetch = stubApi(routes())
+    renderOverview()
+
+    const available = await screen.findByRole('region', { name: 'Available now' })
+    const list = await within(available).findByRole('list', { name: 'Available engineers' })
+    expect(within(list).getAllByRole('listitem').map((item) => item.textContent)).toEqual([
+      'Jo MarshPlumbing0 of 5 open',
+      'Hank VanceHVAC3 of 3 open, at capacity',
+    ])
+    expect(calls(fetch)).toContain('GET /api/facilities/engineers?limit=100&is_available=true&sort=open_assignments&order=asc')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Last 7 days' }))
+    await screen.findByRole('img', { name: /Incidents per building/ })
+    expect(calls(fetch).filter((call) => call.startsWith('GET /api/facilities/engineers'))).toHaveLength(1)
+  })
+
+  it('says when nobody is available', async () => {
+    stubApi(routes({ available: () => jsonResponse(200, page([])) }))
+    renderOverview()
+
+    expect(await screen.findByRole('heading', { name: 'Nobody is available' })).toBeInTheDocument()
   })
 
   it('reloads both halves for another range', async () => {

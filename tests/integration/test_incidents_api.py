@@ -96,7 +96,7 @@ def world(db_session: Session, make_user: Any) -> World:
         inactive_category=inactive_category,
         employee=make_user(email="emp@acme.inc"),
         other_employee=make_user(email="other.emp@acme.inc"),
-        engineer=make_user(Role.ENGINEER, email="eng@acme.inc"),
+        engineer=make_user(Role.ENGINEER, email="eng@acme.inc", specialty="HVAC"),
         other_engineer=make_user(Role.ENGINEER, email="other.eng@acme.inc"),
         inactive_engineer=make_user(Role.ENGINEER, email="gone.eng@acme.inc", is_active=False),
         admin=make_user(Role.FACILITY_ADMIN, email="admin@acme.inc"),
@@ -701,6 +701,12 @@ class TestUpdate:
         assert resp.json()["assignee"]["id"] == str(world.engineer.id)
         row = stored(verify_session, mine["id"])
         assert (row.priority.value, row.assignee_id) == ("Critical", world.engineer.id)
+        # Assigning without moving the status still leaves an audit row.
+        rows = history_of(verify_session, mine["id"])
+        assert [(r.from_status and r.from_status.value, r.to_status.value) for r in rows] == [
+            (None, "Open"), ("Open", "Open")
+        ]
+        assert (rows[-1].actor_id, rows[-1].assignee_id) == (world.admin.id, world.engineer.id)
 
     @pytest.mark.parametrize("which", ["employee", "inactive_engineer", "nobody"])
     def test_the_assignee_must_be_an_active_engineer(
@@ -906,6 +912,8 @@ class TestTransitionEdges:
             (None, "Open"), ("Open", "In Progress")
         ]
         assert rows[-1].actor_id == world.admin.id and rows[-1].note is None
+        # The row names who the admin handed it to.
+        assert rows[-1].assignee_id == world.engineer.id
 
     def test_the_assigned_engineer_starts_work_themselves(
         self, api: Api, actors: Actors, world: World, incidents_client: TestClient
@@ -1007,11 +1015,15 @@ class TestTransitionEdges:
         final = api.moved(actors.employee, mine["id"], "Closed")
         assert final["status"] == "Closed"
         history = incidents_client.get(f"{P}/{mine['id']}/history", headers=actors.employee).json()
+        # The admin's assignment is a row of its own, the status unchanged.
         assert [h["to_status"] for h in history["items"]] == [
-            "Open", "In Progress", "Resolved", "Closed"
+            "Open", "Open", "In Progress", "Resolved", "Closed"
         ]
         assert [h["actor"]["role"] for h in history["items"]] == [
-            "Employee", "Engineer", "Engineer", "Employee"
+            "Employee", "Facility Admin", "Engineer", "Engineer", "Employee"
+        ]
+        assert [h["assignee"] and h["assignee"]["id"] for h in history["items"]] == [
+            None, str(world.engineer.id), None, None, None
         ]
 
 
@@ -1045,6 +1057,41 @@ class TestHistory:
             f"{P}/{done['id']}/history", params={"order": "desc"}, headers=actors.employee
         ).json()
         assert desc["items"][0]["to_status"] == "Resolved"
+
+    def test_says_who_assigned_whom(
+        self, incidents_client: TestClient, api: Api, actors: Actors, world: World
+    ) -> None:
+        """Each hand-over names the engineer; a re-save of the same one is silent."""
+        mine = api.report(actors.employee)
+        for engineer in (world.engineer, world.engineer, world.other_engineer):
+            resp = incidents_client.put(
+                f"{P}/{mine['id']}", json={"assignee_id": str(engineer.id)}, headers=actors.admin
+            )
+            assert resp.status_code == 200, resp.text
+        started = api.moved(actors.admin, mine["id"], "In Progress")
+        assert started["assignee"]["id"] == str(world.other_engineer.id)
+
+        items = incidents_client.get(
+            f"{P}/{mine['id']}/history", headers=actors.employee
+        ).json()["items"]
+        who = [
+            (
+                h["from_status"],
+                h["to_status"],
+                h["actor"]["id"],
+                h["assignee"] and h["assignee"]["id"],
+            )
+            for h in items
+        ]
+        assert who == [
+            (None, "Open", str(world.employee.id), None),
+            ("Open", "Open", str(world.admin.id), str(world.engineer.id)),
+            ("Open", "Open", str(world.admin.id), str(world.other_engineer.id)),
+            # Already assigned, so starting work hands it to nobody new.
+            ("Open", "In Progress", str(world.admin.id), None),
+        ]
+        assert items[1]["assignee"]["full_name"] == world.engineer.full_name
+        assert items[1]["assignee_id"] == str(world.engineer.id)
 
     def test_is_scoped_like_its_parent(
         self, incidents_client: TestClient, api: Api, actors: Actors
@@ -1592,6 +1639,8 @@ class TestReports:
         lead, other = rows
         assert (lead["assigned_count"], lead["open_count"], lead["completed_count"]) == (3, 1, 2)
         assert lead["is_active"] is True
+        assert lead["specialty"] == "HVAC"
+        assert other["specialty"] == "General"
         assert 3 * 3600 <= lead["mean_resolve_seconds"] < 3 * 3600 + 60
         assert (other["assigned_count"], other["open_count"], other["completed_count"]) == (1, 1, 0)
         assert other["mean_resolve_seconds"] is None

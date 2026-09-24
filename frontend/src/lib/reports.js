@@ -219,7 +219,7 @@ export function buildingBars(rows) {
 /**
  * Engineer rows as stacked-bar rows: completed, still open, and, only when
  * it happens, assigned incidents closed without a resolution. Most
- * completed first.
+ * completed first. `role` carries the engineer's specialty for the labels.
  */
 export function engineerBars(rows) {
   const bars = rows
@@ -228,6 +228,7 @@ export function engineerBars(rows) {
       return {
         key: row.engineer_id,
         label: row.engineer,
+        role: row.specialty ?? null,
         values: { [COMPLETED]: row.completed_count, [OPEN]: row.open_count, [UNRESOLVED]: unresolved },
         total: row.assigned_count,
       }

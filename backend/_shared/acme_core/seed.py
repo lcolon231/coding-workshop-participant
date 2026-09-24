@@ -356,8 +356,9 @@ def _replay(incident: Incident, step: SeedStep, users: Mapping[str, User], at: d
     )
     validate_transition(context, step.target, payload)
 
-    if "assignee_id" in payload:
-        incident.assignee_id = payload["assignee_id"]
+    handed_to = None
+    if "assignee_id" in payload and payload["assignee_id"] != incident.assignee_id:
+        handed_to = incident.assignee_id = payload["assignee_id"]
     if step.target is IncidentStatus.BLOCKED:
         incident.blocked_reason = payload["blocked_reason"]
     elif incident.status is IncidentStatus.BLOCKED:
@@ -372,6 +373,7 @@ def _replay(incident: Incident, step: SeedStep, users: Mapping[str, User], at: d
             from_status=incident.status,
             to_status=step.target,
             actor_id=actor.id,
+            assignee_id=handed_to,
             note=payload.get("resolution_note") or payload.get("blocked_reason"),
             created_at=at,
         )

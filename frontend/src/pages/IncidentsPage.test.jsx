@@ -145,6 +145,7 @@ describe('IncidentsPage', () => {
     const fetch = stubApi([
       ['GET', '/api/incidents/reports/buildings', () => jsonResponse(200, { rows: [{ building_id: 'b-1', building: 'HQ', count: 2, open_count: 1, critical_count: 0 }] })],
       ['GET', '/api/incidents/reports/engineers', () => jsonResponse(200, { rows: [] })],
+      ['GET', '/api/facilities/engineers', () => jsonResponse(200, page([]))],
       ['GET', '/api/facilities/buildings', () => jsonResponse(200, page([{ id: 'b-1', name: 'HQ' }]))],
       [
         'GET',
@@ -178,6 +179,7 @@ describe('IncidentsPage', () => {
     stubApi([
       ['GET', '/api/incidents/reports/buildings', () => jsonResponse(200, { rows: [] })],
       ['GET', '/api/incidents/reports/engineers', () => jsonResponse(200, { rows: [] })],
+      ['GET', '/api/facilities/engineers', () => jsonResponse(200, page([]))],
       ['GET', '/api/facilities/buildings', () => jsonResponse(500, { error: 'internal_error', message: 'Database unavailable.' })],
       ['GET', '/api/incidents', () => jsonResponse(200, page(TWO))],
     ])
