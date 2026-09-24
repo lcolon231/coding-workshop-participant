@@ -41,8 +41,35 @@ const AVAILABLE = page([
   },
 ])
 
+const OVERDUE = {
+  items: [
+    {
+      id: 'inc-9',
+      title: 'Server room at 31 degrees',
+      priority: 'Critical',
+      status: 'In Progress',
+      assignee: { id: 'u-eng', full_name: 'Hank Vance', role: 'Engineer' },
+      due_at: '2026-09-23T07:00:00Z',
+      sla_state: 'breached',
+    },
+    {
+      id: 'inc-10',
+      title: 'Flickering light, floor 2',
+      priority: 'Low',
+      status: 'Open',
+      assignee: null,
+      due_at: '2026-09-22T10:00:00Z',
+      sla_state: 'breached',
+    },
+  ],
+  total: 7,
+  limit: 5,
+  offset: 0,
+}
+
 function routes(overrides = {}) {
   return [
+    ['GET', '/api/incidents', overrides.overdue ?? (() => jsonResponse(200, OVERDUE))],
     ['GET', '/api/incidents/reports/buildings', overrides.buildings ?? (() => jsonResponse(200, BUILDINGS))],
     ['GET', '/api/incidents/reports/engineers', overrides.engineers ?? (() => jsonResponse(200, ENGINEERS))],
     ['GET', '/api/facilities/engineers', overrides.available ?? (() => jsonResponse(200, AVAILABLE))],
@@ -135,6 +162,29 @@ describe('IncidentOverview', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Last 7 days' }))
     await screen.findByRole('img', { name: /Incidents per building/ })
     expect(calls(fetch).filter((call) => call.startsWith('GET /api/facilities/engineers'))).toHaveLength(1)
+  })
+
+  it('lists what is overdue right now, worst first, with a link to the rest', async () => {
+    const fetch = stubApi(routes())
+    renderOverview()
+
+    const overdue = await screen.findByRole('region', { name: 'Overdue now' })
+    const list = await within(overdue).findByRole('list', { name: 'Overdue incidents' })
+    expect(within(list).getAllByRole('listitem').map((item) => item.textContent)).toEqual([
+      'Server room at 31 degreesHank VanceCriticalOverdue by 3h',
+      'Flickering light, floor 2UnassignedLowOverdue by 1d',
+    ])
+    expect(within(list).getByRole('link', { name: 'Server room at 31 degrees' })).toHaveAttribute('href', '/incidents/inc-9')
+    expect(within(overdue).getByRole('link', { name: 'See all 7' })).toHaveAttribute('href', '/?overdue=1')
+    expect(calls(fetch)).toContain('GET /api/incidents?overdue=true&sort=due_at&order=asc&limit=5')
+  })
+
+  it('says when nothing is overdue', async () => {
+    stubApi(routes({ overdue: () => jsonResponse(200, page([])) }))
+    renderOverview()
+
+    expect(await screen.findByRole('heading', { name: 'Nothing is overdue' })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /See all/ })).not.toBeInTheDocument()
   })
 
   it('says when nobody is available', async () => {

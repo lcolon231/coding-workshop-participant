@@ -104,7 +104,7 @@ contract behind them, with the rules per endpoint and the decisions taken, is
 | facilities | POST · GET, PUT, DELETE | `/api/facilities/seats` · `/seats/{id}` | ADM / ANY | Seats, unique per floor and code |
 | facilities | GET, POST · GET, PUT, DELETE | `/api/facilities/categories` · `/categories/{id}` | ANY / ADM | Two-level category tree |
 | facilities | GET · GET, PUT | `/api/facilities/engineers` · `/engineers/{user_id}` | ADM | Engineer profiles with open-assignment counts |
-| incidents | POST, GET | `/api/incidents` | ANY (scoped) | Report; list with filters, sort, paging and date range |
+| incidents | POST, GET | `/api/incidents` | ANY (scoped) | Report; list with filters (incl. `overdue`), sort (incl. `due_at`), paging and date range; every row carries `due_at` and `sla_state` |
 | incidents | GET, PUT, DELETE | `/api/incidents/{id}` | ANY (scoped) / ADM delete | Detail with the caller's allowed transitions; partial edit |
 | incidents | POST | `/api/incidents/{id}/transition` | ANY (workflow rules) | The only way status changes |
 | incidents | GET | `/api/incidents/{id}/history` | ANY (scoped) | Append-only status history |

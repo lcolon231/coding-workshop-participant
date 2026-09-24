@@ -138,6 +138,8 @@ export function incidentFixture(overrides = {}) {
     blocked_reason: null,
     created_at: '2026-09-22T09:12:00Z',
     updated_at: '2026-09-22T09:12:00Z',
+    due_at: '2026-09-25T09:12:00Z',
+    sla_state: 'on_track',
     allowed_transitions: [],
     ...overrides,
   }

@@ -403,6 +403,68 @@ class TestList:
     ) -> None:
         assert incidents_client.get(P, headers=actors.admin).json()["total"] == 3
 
+    def test_every_row_carries_its_target_and_where_it_stands(
+        self, incidents_client: TestClient, actors: Actors, seeded: dict[str, Any]
+    ) -> None:
+        """`due_at` is creation plus the D8 target; a fresh incident is on track."""
+        body = incidents_client.get(P, headers=actors.admin).json()
+        rows = {i["title"]: i for i in body["items"]}
+        mine = rows["Mine"]
+        created = dt.datetime.fromisoformat(mine["created_at"])
+        assert dt.datetime.fromisoformat(mine["due_at"]) == created + dt.timedelta(days=7)
+        assert mine["sla_state"] == "on_track"
+        theirs = rows["Theirs"]
+        assert dt.datetime.fromisoformat(theirs["due_at"]) == dt.datetime.fromisoformat(
+            theirs["created_at"]
+        ) + dt.timedelta(hours=4)
+
+    def test_overdue_is_open_work_past_its_target(
+        self,
+        incidents_client: TestClient,
+        db_session: Session,
+        api: Api,
+        actors: Actors,
+        world: World,
+        seeded: dict[str, Any],
+    ) -> None:
+        """Backdating puts a Critical past 4 h; resolving it takes it out of overdue.
+
+        The filter and the per-row state must agree, since one is judged by
+        the database clock and the other by the process clock.
+        """
+        now = dt.datetime.now(dt.UTC)
+        backdate(db_session, seeded["theirs"]["id"], created_at=now - dt.timedelta(hours=5))
+        late = api.moved(
+            actors.admin,
+            api.report(actors.employee, title="Late but done", priority="Critical")["id"],
+            "In Progress",
+            assignee_id=str(world.engineer.id),
+        )
+        api.moved(actors.engineer, late["id"], "Resolved", resolution_note="Fixed")
+        backdate(db_session, late["id"], created_at=now - dt.timedelta(hours=6))
+
+        overdue = incidents_client.get(P, params={"overdue": "true"}, headers=actors.admin).json()
+        assert [i["title"] for i in overdue["items"]] == ["Theirs"]
+        assert overdue["items"][0]["sla_state"] == "breached"
+        rest = incidents_client.get(P, params={"overdue": "false"}, headers=actors.admin).json()
+        assert sorted(i["title"] for i in rest["items"]) == [
+            "Late but done",
+            "Mine",
+            "Theirs, assigned",
+        ]
+        states = {i["title"]: i["sla_state"] for i in rest["items"]}
+        assert states["Late but done"] == "missed"
+        assert states["Theirs, assigned"] == "on_track"
+
+    def test_sort_by_due_orders_by_target_not_by_age(
+        self, incidents_client: TestClient, actors: Actors, seeded: dict[str, Any]
+    ) -> None:
+        """A Critical reported last is due first; a Low reported first is due last."""
+        body = incidents_client.get(
+            P, params={"sort": "due_at", "order": "asc"}, headers=actors.admin
+        ).json()
+        assert [i["title"] for i in body["items"]] == ["Theirs", "Theirs, assigned", "Mine"]
+
     def test_a_filter_cannot_widen_scope(
         self, incidents_client: TestClient, actors: Actors, world: World, seeded: dict[str, Any]
     ) -> None:

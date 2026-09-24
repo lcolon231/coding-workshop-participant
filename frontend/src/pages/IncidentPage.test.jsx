@@ -69,6 +69,9 @@ describe('IncidentPage', () => {
       `In Progress from Open, by ${ENGINEER.full_name}`,
     ])
     expect(await screen.findByText('Headquarters, level 3')).toBeInTheDocument()
+    // Where it stands against its target: the chip in the header, the deadline in the details.
+    expect(screen.getByText(/^Due in /)).toBeInTheDocument()
+    expect(screen.getByText('Target').closest('div')).toHaveTextContent('Sep 25, 2026')
   })
 
   it('renders exactly the transitions the API allows and prompts for what they require', async () => {

@@ -455,7 +455,16 @@ means widening `scope_incidents`, which is the most security-sensitive function 
 
 Filters: `status`, `priority`, `building_id`, `category_id`, `assignee_id`, `created_from` and
 `created_to` (inclusive UTC dates on `created_at`, `400` when inverted), `search` (title and
-description, ≤200 chars). `sort ∈ {created_at, priority, status, title}`, default `created_at desc`.
+description, ≤200 chars), `overdue` (`true`: still open and past its D8 target by the database
+clock; `false`: everything else). `sort ∈ {created_at, priority, status, title, due_at}`, default
+`created_at desc`; `due_at asc` is the triage order, a Critical reported an hour ago ahead of a Low
+reported last week.
+
+Every `IncidentOut` carries two derived fields (T127): `due_at`, `created_at` plus the priority's
+D8 target, and `sla_state`, judged when the row is served: `on_track`, `at_risk` (a quarter of the
+target or less remains) or `breached` while open; `met` or `missed` once resolved (or closed
+without a resolution), by when it finished. Neither is a column, so neither can drift from
+`created_at` and `priority`; the filter and the sort do the same arithmetic in SQL.
 
 Every filter is applied **inside** the scope, so no filter can widen it — an employee passing
 `assignee_id` of some engineer still sees only their own incidents. `total` goes through the same
@@ -699,6 +708,8 @@ SLA targets and the report range bounds live in `acme_core/reporting.py`, not in
 | `NoteOut` | embed `author` | same |
 | `StatusHistoryOut` | embed `actor` | same |
 | `IncidentFilters` | add `category_id` | I2 |
+| `IncidentFilters` | add `overdue`; `due_at` in the sort allowlist | I2, T127 |
+| `IncidentOut` | computed `due_at` and `sla_state` from the D8 targets | I2, T127 |
 | every `*Update` | now an `UpdateModel`: explicit `null` is refused unless the field is in `CLEARABLE` | §1.4 partial-update rule |
 | `BuildingUpdate`, `IncidentUpdate` | moved onto `UpdateModel`; `address` / `category_id`, `assignee_id` clearable | same |
 
@@ -718,7 +729,7 @@ resolves them from a cached lookup instead of every incident row repeating build
 | D5 | Admin-created users domain | Enforce `@acme.inc` too | Allow any domain for contractors |
 | D6 | Engineer visibility of unassigned work | Keep admin triage; do not widen scoping. **Tightened 2026-09-23:** engineers see assigned work only (not their own reports) and cannot assign, even to themselves | Add a pick-up queue |
 | D7 | Priority at creation | Reporter may set it; only admin changes it later | Force `Medium` |
-| D8 | SLA targets | 4 h / 24 h / 3 d / 7 d constants | Configurable per category (needs a table) |
+| D8 | SLA targets | 4 h / 24 h / 3 d / 7 d constants; since T127 also graded live on every incident (`due_at`, `sla_state`, the `overdue` filter) | Configurable per category (needs a table) |
 | D9 | Notification delivery | In-app rows, polled once a minute | Email (no sender configured) or WebSockets (needs API Gateway) |
 
 ## 8. Totals
