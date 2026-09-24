@@ -63,9 +63,10 @@ jobs:
             -r backend/incidents/requirements.txt \
             -r backend/facilities/requirements.txt
 
-      # The vendored copies (backend/<service>/acme_core) are committed. Fail
-      # fast if anything resolves acme_core from one of them instead of the
-      # source of truth, or the suite could pass against a stale artifact.
+      # The vendored copies (backend/<service>/acme_core) are gitignored, but a
+      # stale one could exist on a developer machine. Fail fast if anything
+      # resolves acme_core from one of them instead of the source of truth, or
+      # the suite could pass against a stale artifact.
       - name: Verify acme_core resolves from backend/_shared
         run: |
           PYTHONPATH=backend/_shared:backend/auth .venv/bin/python - <<'PY'

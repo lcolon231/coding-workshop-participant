@@ -472,7 +472,7 @@ proxy wiring. Add a CI test job; today `.github/workflows/` runs bandit and `npm
 | 16 | `test: e2e journey + cloud smoke + CI test job` | |
 | 17 | `docs: NOTES.md, architecture and trade-offs` | modular-monolith framing; measured numbers; known gaps table |
 
-**Gates:** after 5, `make migrate` builds 12 tables · after 10, all acceptance curls pass against
+**Gates:** after 5, `make migrate` builds 13 tables · after 10, all acceptance curls pass against
 uvicorn · after 11, the same curls pass against CloudFront **and memory is measured** · after 16,
 `make cov` ≥ 80%.
 
@@ -481,7 +481,7 @@ uvicorn · after 11, the same curls pass against CloudFront **and memory is meas
 ```sh
 make venv                    # one-time: .venv + requirements + dev requirements
 make serve                   # uvicorn :8000 ; curl localhost:8000/api/auth/healthz -> {"status":"ok", "build": ...}
-make migrate                 # alembic upgrade head -> 12 tables
+make migrate                 # alembic upgrade head -> 13 tables
 make seed                    # re-run -> 0 rows created (idempotent)
 curl -sX POST localhost:8000/api/auth/register -H 'Content-Type: application/json' \
   -d '{"email":"demo@acme.inc","password":"correct-horse-battery","full_name":"Demo"}'   # 201
