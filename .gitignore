@@ -219,6 +219,8 @@ logs
 
 # Coverage data
 coverage
+# The frontend HTML report is committed so it can be read on GitHub.
+!frontend/coverage/
 
 # Build output
 dist
