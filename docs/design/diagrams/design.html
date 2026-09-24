@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Domain data model: 12 tables, three aggregates</title>
+  <title>Domain data model: 13 tables, three aggregates</title>
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&family=Noto+Serif:ital@0;1&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -68,11 +68,11 @@
 <body>
   <div class="frame">
     <p class="eyebrow">ER / data model · ACME Facility Incident Management</p>
-    <h1>Domain data model: 12 tables, three aggregates</h1>
-    <p class="subtitle">Cardinalities follow the foreign keys and their ondelete rules. Actor references from notes, history and escalations back to users are shown as foreign-key rows rather than lines. Enum values are the display strings stored in the column.</p>
-    <svg viewBox="0 0 1320 1144" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="design-title design-desc">
-      <title id="design-title">Domain data model: 12 tables, three aggregates</title>
-      <desc id="design-desc">Entity-relationship diagram showing users owning sessions and engineer profiles, buildings containing floors and seats, and the incident aggregate root with its append-only notes, status history and escalation requests.</desc>
+    <h1>Domain data model: 13 tables, three aggregates</h1>
+    <p class="subtitle">Cardinalities follow the foreign keys and their ondelete rules. Actor and recipient references from notes, history, escalations and notifications back to users are shown as foreign-key rows rather than lines. Enum values are the display strings stored in the column.</p>
+    <svg viewBox="0 0 1320 1324" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="design-title design-desc">
+      <title id="design-title">Domain data model: 13 tables, three aggregates</title>
+      <desc id="design-desc">Entity-relationship diagram showing users owning sessions and engineer profiles, buildings containing floors and seats, and the incident aggregate root with its append-only notes, status history, escalation requests and per-recipient notifications.</desc>
       <defs>
         <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
         <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/></marker>
@@ -86,7 +86,7 @@
         <rect x="40" y="380" width="272" height="660" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
         <rect x="52" y="384" width="248" height="12" rx="2" fill="#f5f5f5"/>
         <text x="176" y="393" fill="rgba(45,49,66,0.40)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">FACILITY AND CATALOG · MODELS/FACILITY, CATALOG</text>
-        <rect x="372" y="380" width="908" height="580" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+        <rect x="372" y="380" width="908" height="760" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
         <rect x="632" y="384" width="192" height="12" rx="2" fill="#f5f5f5"/>
         <text x="728" y="393" fill="rgba(45,49,66,0.40)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">INCIDENT AGGREGATE · MODELS/INCIDENT</text>
         <path d="M 396,136 H 320" fill="none" stroke="#4f5d75" stroke-width="1"/>
@@ -446,20 +446,51 @@
         <text x="1140" y="894" fill="#7a8399" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">timestamptz · nullable</text>
         <text x="864" y="907" fill="#2d3142" font-size="9" font-family="'Geist Mono', monospace">decision_note</text>
         <text x="1140" y="907" fill="#7a8399" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">text · nullable</text>
-        <line x1="40" y1="1076" x2="1280" y2="1076" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
-        <text x="40" y="1092" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.18em">LEGEND</text>
-        <rect x="40" y="1108" width="14" height="10" rx="2" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/>
-        <text x="60" y="1117" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Aggregate root</text>
-        <rect x="155.39999999999998" y="1108" width="14" height="10" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-        <text x="175.39999999999998" y="1117" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Entity</text>
-        <rect x="229.99999999999997" y="1108" width="14" height="10" rx="2" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
-        <text x="249.99999999999997" y="1117" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Entity with no relationship</text>
-        <text x="411.69999999999993" y="1117" fill="#2d3142" font-size="10" font-family="'Geist Mono', monospace" font-weight="600">#</text>
-        <text x="427.69999999999993" y="1117" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Primary key</text>
-        <text x="507.79999999999995" y="1117" fill="#2d3142" font-size="10" font-family="'Geist Mono', monospace" font-weight="600">→</text>
-        <text x="523.8" y="1117" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Foreign key (target · ondelete rule at right)</text>
-        <text x="777.3" y="1117" fill="#2d3142" font-size="10" font-family="'Geist Mono', monospace" font-weight="600">1 / N / 0..1</text>
-        <text x="861.3" y="1117" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Cardinality at each end</text>
+        <path d="M 572,700 V 1022 H 852" fill="none" stroke="#4f5d75" stroke-width="1"/>
+        <rect x="566" y="706" width="12" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="572" y="715" fill="#4f5d75" font-size="9" font-weight="600" font-family="'Geist Mono', monospace" text-anchor="middle">1</text>
+        <rect x="834" y="1016" width="12" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="840" y="1025" fill="#4f5d75" font-size="9" font-weight="600" font-family="'Geist Mono', monospace" text-anchor="middle">N</text>
+        <rect x="660" y="990" width="124" height="26" rx="2" fill="#f5f5f5"/>
+        <text x="778" y="1000" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="end">ANNOUNCED BY · CASCADE</text>
+        <text x="778" y="1011" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="end">SAME TRANSACTION</text>
+        <rect x="852" y="944" width="300" height="156" rx="6" fill="#f5f5f5"/>
+        <rect x="852" y="944" width="300" height="156" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="852" y="944" width="300" height="40" rx="6" fill="rgba(45,49,66,0.04)" stroke="none"/>
+        <rect x="852" y="976" width="300" height="8" fill="rgba(45,49,66,0.04)"/>
+        <line x1="852" y1="984" x2="1152" y2="984" stroke="rgba(45,49,66,0.22)" stroke-width="1"/>
+        <text x="864" y="960" fill="#2d3142" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">ENTITY</text>
+        <text x="864" y="976" fill="#2d3142" font-size="14" font-weight="600" font-family="'Geist', sans-serif">NOTIFICATIONS</text>
+        <text x="864" y="996" fill="#2d3142" font-size="9" font-family="'Geist Mono', monospace"># id</text>
+        <text x="1140" y="996" fill="#7a8399" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">uuid</text>
+        <text x="864" y="1009" fill="#2d3142" font-size="9" font-family="'Geist Mono', monospace">→ user_id</text>
+        <text x="1140" y="1009" fill="#7a8399" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">users · recipient · cascade</text>
+        <text x="864" y="1022" fill="#2d3142" font-size="9" font-family="'Geist Mono', monospace">→ incident_id</text>
+        <text x="1140" y="1022" fill="#7a8399" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">incidents · cascade</text>
+        <text x="864" y="1035" fill="#2d3142" font-size="9" font-family="'Geist Mono', monospace">→ actor_id</text>
+        <text x="1140" y="1035" fill="#7a8399" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">users · who acted · set null</text>
+        <text x="864" y="1048" fill="#2d3142" font-size="9" font-family="'Geist Mono', monospace">kind</text>
+        <text x="1140" y="1048" fill="#7a8399" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">Assigned | Reported</text>
+        <text x="864" y="1061" fill="#2d3142" font-size="9" font-family="'Geist Mono', monospace">incident_title</text>
+        <text x="1140" y="1061" fill="#7a8399" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">string · snapshot, no join</text>
+        <text x="864" y="1074" fill="#2d3142" font-size="9" font-family="'Geist Mono', monospace">read_at</text>
+        <text x="1140" y="1074" fill="#7a8399" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">timestamptz · nullable</text>
+        <text x="864" y="1087" fill="#2d3142" font-size="9" font-family="'Geist Mono', monospace">created_at</text>
+        <text x="1140" y="1087" fill="#7a8399" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">timestamptz</text>
+        <line x1="40" y1="1256" x2="1280" y2="1256" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+        <text x="40" y="1272" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.18em">LEGEND</text>
+        <rect x="40" y="1288" width="14" height="10" rx="2" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/>
+        <text x="60" y="1297" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Aggregate root</text>
+        <rect x="155.39999999999998" y="1288" width="14" height="10" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <text x="175.39999999999998" y="1297" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Entity</text>
+        <rect x="229.99999999999997" y="1288" width="14" height="10" rx="2" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+        <text x="249.99999999999997" y="1297" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Entity with no relationship</text>
+        <text x="411.69999999999993" y="1297" fill="#2d3142" font-size="10" font-family="'Geist Mono', monospace" font-weight="600">#</text>
+        <text x="427.69999999999993" y="1297" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Primary key</text>
+        <text x="507.79999999999995" y="1297" fill="#2d3142" font-size="10" font-family="'Geist Mono', monospace" font-weight="600">→</text>
+        <text x="523.8" y="1297" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Foreign key (target · ondelete rule at right)</text>
+        <text x="777.3" y="1297" fill="#2d3142" font-size="10" font-family="'Geist Mono', monospace" font-weight="600">1 / N / 0..1</text>
+        <text x="861.3" y="1297" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Cardinality at each end</text>
 
     </svg>
     <p class="colophon">Redrawn from docs/design/diagrams with the diagram-design skill · default editorial skin · ER / data model</p>
