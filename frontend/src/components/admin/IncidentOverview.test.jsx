@@ -154,8 +154,8 @@ describe('IncidentOverview', () => {
     const available = await screen.findByRole('region', { name: 'Available now' })
     const list = await within(available).findByRole('list', { name: 'Available engineers' })
     expect(within(list).getAllByRole('listitem').map((item) => item.textContent)).toEqual([
-      'Jo MarshPlumbing0 of 5 open',
-      'Hank VanceHVAC3 of 3 open, at capacity',
+      'Jo MarshPlumbingLow load',
+      'Hank VanceHVACHigh load',
     ])
     expect(calls(fetch)).toContain('GET /api/facilities/engineers?limit=100&is_available=true&sort=open_assignments&order=asc')
 

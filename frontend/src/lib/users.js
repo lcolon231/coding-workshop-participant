@@ -22,3 +22,16 @@ export const USER_SORT_OPTIONS = [
   { value: 'email:asc', label: 'Email, A to Z' },
   { value: 'role:asc', label: 'Role' },
 ]
+
+/**
+ * An engineer's load as a word rather than a fraction. Anyone at or over
+ * their concurrent-incident limit is "High"; at half of it or more,
+ * "Medium"; otherwise "Low". A limit of zero is always full.
+ */
+export function loadLevel(engineer) {
+  const open = engineer.open_assignments ?? 0
+  const limit = engineer.max_concurrent_incidents ?? 0
+  if (open >= limit) return 'High'
+  if (open * 2 >= limit) return 'Medium'
+  return 'Low'
+}
