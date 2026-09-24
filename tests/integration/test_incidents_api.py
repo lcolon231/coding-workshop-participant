@@ -1855,17 +1855,26 @@ class TestNotifications:
         assert resp.status_code == 200, resp.text
         assert len(notifications_of(verify_session, world.engineer)) == 1
 
-    def test_resolving_tells_the_reporter(
-        self, api: Api, actors: Actors, world: World, verify_session: Session
+    def test_resolving_tells_the_reporter_and_the_admins(
+        self, api: Api, actors: Actors, world: World, make_user: Any, verify_session: Session
     ) -> None:
+        second_admin = make_user(Role.FACILITY_ADMIN, email="admin2@acme.inc")
+        retired_admin = make_user(Role.FACILITY_ADMIN, email="gone@acme.inc", is_active=False)
         incident = api.resolved(actors)
         rows = notifications_of(verify_session, world.employee)
         assert [(r.kind.value, r.actor_id) for r in rows] == [("Resolved", world.engineer.id)]
         assert str(rows[0].incident_id) == incident["id"]
-        # The admin already heard about the report and nothing since.
-        assert [r.kind.value for r in notifications_of(verify_session, world.admin)] == ["Reported"]
+        for admin in (world.admin, second_admin):
+            assert [r.kind.value for r in notifications_of(verify_session, admin)] == [
+                "Reported", "Resolved"
+            ]
+        assert notifications_of(verify_session, retired_admin) == []
+        # The engineer who resolved it is not told about their own act.
+        assert [r.kind.value for r in notifications_of(verify_session, world.engineer)] == [
+            "Assigned"
+        ]
 
-    def test_the_reporter_closing_their_own_incident_tells_nobody(
+    def test_the_reporter_closing_their_own_incident_tells_the_admins_only(
         self, api: Api, actors: Actors, world: World, verify_session: Session
     ) -> None:
         done = api.resolved(actors)
@@ -1873,11 +1882,14 @@ class TestNotifications:
         assert [r.kind.value for r in notifications_of(verify_session, world.employee)] == [
             "Resolved"
         ]
+        assert [(r.kind.value, r.actor_id) for r in notifications_of(verify_session, world.admin)][
+            -1
+        ] == ("Closed", world.employee.id)
         assert [r.kind.value for r in notifications_of(verify_session, world.engineer)] == [
             "Assigned"
         ]
 
-    def test_an_admin_closing_tells_the_reporter(
+    def test_an_admin_closing_tells_the_reporter_but_not_themselves(
         self, api: Api, actors: Actors, world: World, verify_session: Session
     ) -> None:
         done = api.resolved(actors)
@@ -1886,6 +1898,9 @@ class TestNotifications:
         assert [(r.kind.value, r.actor_id) for r in rows] == [
             ("Resolved", world.engineer.id),
             ("Closed", world.admin.id),
+        ]
+        assert [r.kind.value for r in notifications_of(verify_session, world.admin)] == [
+            "Reported", "Resolved"
         ]
 
     def test_a_failed_assignment_leaves_no_notification(
