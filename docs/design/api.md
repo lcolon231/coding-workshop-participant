@@ -626,9 +626,10 @@ Four events produce one:
   writes one row for the **new** assignee. Re-saving the same assignee says nothing new. A refused
   assignment (inactive engineer, 400) leaves no row, because the whole request rolls back.
 - **`Resolved`** and **`Closed`** (T129, migration `d7a1c3e5f209`) — a transition into either
-  status writes one row for the **reporter**, unless the reporter took the step themselves (a
-  reporter who confirms and closes already knows). This is the reporter's half of the loop: they
-  are told the outcome without polling the incident, and the bell now shows for every role.
+  status writes one row for the **reporter** and one per **active Facility Admin**, skipping
+  whoever took the step (a reporter who confirms and closes already knows; so does the admin who
+  closed it). The reporter is told the outcome without polling the incident, the admins see work
+  land, and the bell now shows for every role.
 
 The recipient is the only reader. Every query filters on the caller's id before anything else, so
 someone else's notification is `404`, never `403` (§1.5). `NotificationOut` carries the kind, the
