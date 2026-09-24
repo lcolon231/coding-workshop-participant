@@ -66,10 +66,13 @@ test('an incident goes from report to closed through the roles that own each ste
   await page.getByLabel('Floor').selectOption({ index: 1 })
   await page.getByLabel('Seat').selectOption({ index: 1 })
   await page.locator('form button[type="submit"]').click()
+  // Reporting lands back on the list with a notice; the new row leads to the detail page.
+  await expect(page).toHaveURL(/\/$/)
+  await expect(page.getByText('Incident created successfully.')).toBeVisible()
+  await page.getByRole('link', { name: title }).click()
   await expect(page).toHaveURL(/\/incidents\/[0-9a-f-]{36}$/)
   const incidentUrl = page.url()
   await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible()
-  await expect(page.getByText('Incident reported.')).toBeVisible()
   // A reporter has no forward move on an open incident.
   await expect(page.getByRole('button', { name: 'Acknowledge and start work' })).toHaveCount(0)
   await signOut(page)
