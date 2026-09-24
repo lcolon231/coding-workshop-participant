@@ -219,6 +219,23 @@ class EscalationRequest(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     requested_by: Mapped["User"] = relationship(foreign_keys=[requested_by_id])
     decided_by: Mapped[Optional["User"]] = relationship(foreign_keys=[decided_by_id])
 
+    # Read through the relationship for `EscalationOut`, so the admin queue
+    # can name and rank each request without a fetch per incident.
+    @property
+    def incident_title(self) -> str:
+        """The incident's current title."""
+        return self.incident.title
+
+    @property
+    def incident_status(self) -> IncidentStatus:
+        """The incident's current status."""
+        return self.incident.status
+
+    @property
+    def incident_priority(self) -> Priority:
+        """The incident's current priority, after any approval."""
+        return self.incident.priority
+
     __table_args__ = (Index("ix_escalation_requests_incident_id", "incident_id"),)
 
     def __repr__(self) -> str:

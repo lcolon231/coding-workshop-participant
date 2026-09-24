@@ -27,6 +27,7 @@ import {
   createNote,
   getIncident,
   listHistory,
+  decideEscalation,
   listIncidentEscalations,
   listNotes,
   requestEscalation,
@@ -391,6 +392,15 @@ export default function IncidentPage() {
             onRequest={async (reason) => {
               await requestEscalation(incident.id, reason)
               afterMutation('Escalation requested.')
+            }}
+            canDecide={admin}
+            onDecide={async (item, decision, note) => {
+              const decided = await decideEscalation(item.id, { decision, decision_note: note })
+              afterMutation(
+                decision === 'Approved'
+                  ? `Escalation approved. Priority is now ${decided.incident_priority}.`
+                  : 'Escalation rejected.',
+              )
             }}
           />
         </Stack>

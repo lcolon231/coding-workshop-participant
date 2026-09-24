@@ -257,10 +257,17 @@ class EscalationFilters(PageParams):
 
 
 class EscalationOut(ResponseModel):
-    """An escalation request and, once made, its decision."""
+    """An escalation request and, once made, its decision.
+
+    Carries the incident's title, status and priority as they are now, so
+    the admin queue reads without a fetch per row.
+    """
 
     id: uuid.UUID
     incident_id: uuid.UUID
+    incident_title: str
+    incident_status: IncidentStatus
+    incident_priority: Priority
     requested_by: UserSummary
     reason: str
     status: EscalationStatus
