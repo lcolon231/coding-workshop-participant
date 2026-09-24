@@ -1,5 +1,5 @@
 %% ACME Facility Incident Management -- domain data model
-%% The 12 tables in backend/_shared/acme_core/models (users, facility, catalog, incident)
+%% The 13 tables in backend/_shared/acme_core/models (users, facility, catalog, incident, notification)
 %% plus app_secrets. Cardinalities follow the foreign keys and their ondelete rules.
 %% Enum values are the display strings stored in the column, e.g. "In Progress".
 %% Companion: workflow.mmd draws the incident status machine driven from this model.
@@ -13,6 +13,8 @@ erDiagram
     USERS ||--o{ INCIDENT_STATUS_HISTORY : "acts (restrict)"
     USERS ||--o{ ESCALATION_REQUESTS : "requests (restrict)"
     USERS |o--o{ ESCALATION_REQUESTS : "decides (set null)"
+    USERS ||--o{ NOTIFICATIONS : "receives (cascade)"
+    USERS |o--o{ NOTIFICATIONS : "acts (set null)"
 
     BUILDINGS ||--o{ FLOORS : "contains (cascade)"
     FLOORS ||--o{ SEATS : "contains (cascade)"
@@ -26,6 +28,7 @@ erDiagram
     INCIDENTS ||--o{ INCIDENT_NOTES : "has (cascade, append-only)"
     INCIDENTS ||--o{ INCIDENT_STATUS_HISTORY : "has (cascade, append-only)"
     INCIDENTS ||--o{ ESCALATION_REQUESTS : "has (cascade, one Pending at a time)"
+    INCIDENTS ||--o{ NOTIFICATIONS : "announced by (cascade, written in the same transaction)"
 
     USERS {
         uuid id PK
@@ -149,4 +152,15 @@ erDiagram
         uuid decided_by_id FK "nullable, admin"
         timestamptz decided_at "nullable"
         text decision_note "nullable"
+    }
+
+    NOTIFICATIONS {
+        uuid id PK
+        uuid user_id FK "recipient, the only reader"
+        uuid incident_id FK
+        uuid actor_id FK "nullable, who did the thing announced"
+        enum kind "Assigned -> the engineer | Reported -> every active Facility Admin"
+        string incident_title "snapshot, so listing needs no join"
+        timestamptz read_at "nullable"
+        timestamptz created_at
     }

@@ -12,7 +12,7 @@ system, its measured numbers and the demo script, start at the root [`NOTES.md`]
 | [tasks.md](tasks.md) | Every task required to complete the project, with status and gates. |
 | [reviews.md](reviews.md) | Findings from three review passes, with what was accepted and what was rejected and why. |
 | [plan-before-review.md](plan-before-review.md) | Revision 3, kept only so the reviews' effect can be diffed. Superseded. |
-| [diagrams/](diagrams/) | Mermaid sources, one diagram per file: `architecture.mmd` (runtime topology, Lambda internals, build path), `design.mmd` (the 12-table data model), `workflow.mmd` (incident status machine), `security.mmd` (trust boundaries, auth chain, credentials, admin path). |
+| [diagrams/](diagrams/) | Mermaid sources, one diagram per file: `architecture.mmd` (runtime topology, Lambda internals, build path), `design.mmd` (the 13-table data model), `workflow.mmd` (incident status machine), `security.mmd` (trust boundaries, auth chain, credentials, admin path). |
 | [diagrams/*.html](diagrams/) | The same diagrams redrawn as self-contained HTML/SVG with the diagram-design skill: `architecture-overview.html` and `architecture-lambda.html` (from `architecture.mmd`), `design.html`, `workflow.html`, `security-boundaries.html` and `security-auth-chain.html` (from `security.mmd`). Open in a browser; the `.mmd` files remain the editable source. |
 
 ## Reading order for `plan.md`
