@@ -192,7 +192,8 @@ class SeedIncident:
 
 
 _START = IncidentStatus.IN_PROGRESS
-SEED_INCIDENTS: Final[tuple[SeedIncident, ...]] = (
+# The six that walk through every status; the rest of the sixty follow.
+_FIRST_INCIDENTS: Final[tuple[SeedIncident, ...]] = (
     SeedIncident(
         "Aircon dripping onto desk 3-02", "Water on the desk since about 9am.",
         EMPLOYEE, Priority.MEDIUM, "HQ", days_ago=0.2,
@@ -245,6 +246,440 @@ SEED_INCIDENTS: Final[tuple[SeedIncident, ...]] = (
         ),
     ),
 )
+
+# The five moves an incident can make, as one-liners, so the sixty scripts
+# below read as histories rather than as dataclass literals.
+
+
+def _assign(engineer: str, hours_later: float = 2) -> SeedStep:
+    """An admin acknowledges the report and hands it to an engineer."""
+    return SeedStep(ADMIN, IncidentStatus.IN_PROGRESS, hours_later, assignee=engineer)
+
+
+def _block(engineer: str, hours_later: float, reason: str) -> SeedStep:
+    """The assigned engineer parks it on something outside their control."""
+    return SeedStep(engineer, IncidentStatus.BLOCKED, hours_later, {"blocked_reason": reason})
+
+
+def _unblock(engineer: str, hours_later: float) -> SeedStep:
+    """The dependency cleared; work resumes."""
+    return SeedStep(engineer, IncidentStatus.IN_PROGRESS, hours_later)
+
+
+def _resolve(engineer: str, hours_later: float, note: str) -> SeedStep:
+    """The assigned engineer says what was done."""
+    return SeedStep(engineer, IncidentStatus.RESOLVED, hours_later, {"resolution_note": note})
+
+
+def _reopen(reporter: str, hours_later: float) -> SeedStep:
+    """The reporter disagrees that it is fixed."""
+    return SeedStep(reporter, IncidentStatus.IN_PROGRESS, hours_later)
+
+
+def _close(actor: str, hours_later: float, note: str | None = None) -> SeedStep:
+    """The reporter confirms a resolution, or an admin closes an open report with a note."""
+    payload = {"resolution_note": note} if note else {}
+    return SeedStep(actor, IncidentStatus.CLOSED, hours_later, payload)
+
+
+def _fixed(
+    engineer: str,
+    note: str,
+    *,
+    picked_up: float = 2,
+    done: float = 20,
+    confirmed_by: str | None = None,
+    confirmed: float = 24,
+) -> tuple[SeedStep, ...]:
+    """The common path: assigned, resolved and, when `confirmed_by` is the reporter, closed."""
+    steps = (_assign(engineer, picked_up), _resolve(engineer, done, note))
+    if confirmed_by is not None:
+        steps += (_close(confirmed_by, confirmed),)
+    return steps
+
+
+_HVAC: Final = ("Facilities", "HVAC")
+_ELECTRICAL: Final = ("Facilities", "Electrical")
+_PLUMBING: Final = ("Facilities", "Plumbing")
+_CLEANING: Final = ("Facilities", "Cleaning")
+_MONITOR: Final = ("Workplace Technology", "Monitor")
+_NETWORK: Final = ("Workplace Technology", "Network")
+_PRINTER: Final = ("Workplace Technology", "Printer")
+_DOCK: Final = ("Workplace Technology", "Docking Station")
+
+# Fifty-four more, so every list page, filter, report and SLA state has
+# something in it. Ages run from an hour to twelve weeks; the newer an
+# incident, the more likely it is still open.
+_MORE_INCIDENTS: Final[tuple[SeedIncident, ...]] = (
+    # ------------------------------------------------------------------ HVAC
+    SeedIncident(
+        "Cold draught at desk 2-01", "There is a constant cold draught from the vent overhead.",
+        SECOND_EMPLOYEE, Priority.LOW, "HQ", days_ago=1, category=_HVAC, floor=2, seat="2-01",
+    ),
+    SeedIncident(
+        "Meeting room 3B too warm all afternoon", "Reads 27 degrees by 2pm every day this week.",
+        EMPLOYEE, Priority.MEDIUM, "HQ", days_ago=3, category=_HVAC, floor=3,
+        steps=(_assign(HVAC_ENGINEER, 5),),
+    ),
+    SeedIncident(
+        "Aircon rattling above the Finance desks", "A loud rattle whenever the fan speeds up.",
+        EMPLOYEE, Priority.LOW, "HQ", days_ago=9, category=_HVAC, floor=3,
+        steps=_fixed(HVAC_ENGINEER, "Tightened the loose grille and rebalanced the fan.", done=30),
+    ),
+    SeedIncident(
+        "No heating in the Riverside support area", "Radiators cold since Monday; people in coats.",
+        SECOND_EMPLOYEE, Priority.HIGH, "RVA", days_ago=15, category=_HVAC, floor=2,
+        steps=(
+            _assign(HVAC_ENGINEER, 1),
+            _block(HVAC_ENGINEER, 4, "Boiler control board on back order from the supplier."),
+            _unblock(HVAC_ENGINEER, 72),
+            _resolve(HVAC_ENGINEER, 6, "Fitted the new control board and bled the radiators."),
+            _close(SECOND_EMPLOYEE, 20),
+        ),
+    ),
+    SeedIncident(
+        "Thermostat on floor 2 stuck at 18 degrees",
+        "The dial turns but the reading never changes.",
+        EMPLOYEE, Priority.MEDIUM, "HQ", days_ago=33, category=_HVAC, floor=2,
+        steps=_fixed(HVAC_ENGINEER, "Replaced the thermostat head.", confirmed_by=EMPLOYEE),
+    ),
+    SeedIncident(
+        "Musty smell from the lobby vents", "Noticeable as soon as you walk in.",
+        SECOND_EMPLOYEE, Priority.LOW, "HQ", days_ago=55, category=_HVAC, floor=1,
+        steps=_fixed(
+            HVAC_ENGINEER, "Cleaned the ducts and changed the filters.",
+            picked_up=26, done=48, confirmed_by=SECOND_EMPLOYEE, confirmed=70,
+        ),
+    ),
+    SeedIncident(
+        "Server cupboard on floor 2 overheating", "Temperature alarm on the rack went off at 6am.",
+        EMPLOYEE, Priority.CRITICAL, "HQ", days_ago=41, category=_HVAC, floor=2,
+        steps=_fixed(
+            HVAC_ENGINEER, "Cleared the blocked intake and reset the split unit.",
+            picked_up=0.5, done=3, confirmed_by=EMPLOYEE, confirmed=4,
+        ),
+    ),
+    # ------------------------------------------------------------ Electrical
+    SeedIncident(
+        "Power socket dead at 3-04", "Neither outlet under the desk works; tested with a lamp.",
+        EMPLOYEE, Priority.MEDIUM, "HQ", days_ago=0.5, category=_ELECTRICAL, floor=3, seat="3-04",
+    ),
+    SeedIncident(
+        "Lights out in the third-floor stairwell", "Pitch dark between floors 2 and 3.",
+        SECOND_EMPLOYEE, Priority.HIGH, "HQ", days_ago=2.5, category=_ELECTRICAL, floor=3,
+        steps=(_assign(HVAC_ENGINEER, 1),),
+    ),
+    SeedIncident(
+        "Emergency exit sign flickering on floor 1",
+        "The sign by the side door flickers constantly.",
+        EMPLOYEE, Priority.HIGH, "HQ", days_ago=7, category=_ELECTRICAL, floor=1,
+        steps=_fixed(HVAC_ENGINEER, "Replaced the sign's battery pack and LED board.", done=8),
+    ),
+    SeedIncident(
+        "Tripping breaker in the Riverside kitchen",
+        "Kettle and microwave together trip the circuit.",
+        SECOND_EMPLOYEE, Priority.HIGH, "RVA", days_ago=19, category=_ELECTRICAL, floor=1,
+        steps=_fixed(
+            HVAC_ENGINEER, "Moved the microwave to its own circuit.",
+            picked_up=3, done=26, confirmed_by=SECOND_EMPLOYEE,
+        ),
+    ),
+    SeedIncident(
+        "Buzzing from the ceiling light at 2-04", "A low buzz all day; worse when it is dimmed.",
+        EMPLOYEE, Priority.LOW, "HQ", days_ago=27, category=_ELECTRICAL, floor=2, seat="2-04",
+        steps=_fixed(
+            HVAC_ENGINEER, "Swapped the failing driver.", picked_up=30, done=50,
+                confirmed_by=EMPLOYEE,
+        ),
+    ),
+    SeedIncident(
+        "Extension leads daisy-chained under desk 1-02", "Three leads plugged into each other.",
+        SECOND_EMPLOYEE, Priority.MEDIUM, "HQ", days_ago=48, category=_ELECTRICAL, floor=1,
+        seat="1-02",
+        steps=(_close(ADMIN, 5, "Sorted at the desk move; the leads have gone."),),
+    ),
+    SeedIncident(
+        "Lift call button unlit on the ground floor",
+        "The button still works but does not light up.",
+        EMPLOYEE, Priority.MEDIUM, "HQ", days_ago=62, category=_ELECTRICAL, floor=1,
+        steps=_fixed(
+            HVAC_ENGINEER, "Lift contractor replaced the button assembly.",
+            picked_up=4, done=120, confirmed_by=EMPLOYEE, confirmed=48,
+        ),
+    ),
+    # -------------------------------------------------------------- Plumbing
+    SeedIncident(
+        "Toilet on floor 3 keeps running", "The cistern never stops refilling.",
+        EMPLOYEE, Priority.MEDIUM, "HQ", days_ago=1.5, category=_PLUMBING, floor=3,
+    ),
+    SeedIncident(
+        "No hot water in the Riverside washroom", "Only cold from every tap since Tuesday.",
+        SECOND_EMPLOYEE, Priority.MEDIUM, "RVA", days_ago=5, category=_PLUMBING, floor=1,
+        steps=(
+            _assign(HVAC_ENGINEER, 2),
+            _block(HVAC_ENGINEER, 5, "Waiting for the plumber's next site visit."),
+        ),
+    ),
+    SeedIncident(
+        "Blocked sink in the Engineering kitchenette", "Water sits in the sink for an hour.",
+        EMPLOYEE, Priority.HIGH, "HQ", days_ago=11, category=_PLUMBING, floor=2,
+        steps=_fixed(HVAC_ENGINEER, "Cleared the trap and flushed the line.", done=6),
+    ),
+    SeedIncident(
+        "Water cooler on floor 1 not dispensing", "The light is on but nothing comes out.",
+        SECOND_EMPLOYEE, Priority.LOW, "HQ", days_ago=24, category=_PLUMBING, floor=1,
+        steps=_fixed(
+            HVAC_ENGINEER, "Descaled the valve and replaced the filter.",
+            picked_up=20, done=28, confirmed_by=SECOND_EMPLOYEE,
+        ),
+    ),
+    SeedIncident(
+        "Dripping ceiling in the Riverside stairwell", "Water coming through the ceiling tiles.",
+        EMPLOYEE, Priority.CRITICAL, "RVA", days_ago=36, category=_PLUMBING, floor=2,
+        steps=_fixed(
+            HVAC_ENGINEER, "Repaired the split joint above and replaced two tiles.",
+            picked_up=0.5, done=9, confirmed_by=EMPLOYEE, confirmed=12,
+        ),
+    ),
+    SeedIncident(
+        "Low water pressure on the second floor", "Taps barely trickle in the afternoon.",
+        SECOND_EMPLOYEE, Priority.LOW, "HQ", days_ago=70, category=_PLUMBING, floor=2,
+        steps=_fixed(
+            HVAC_ENGINEER, "Cleaned the aerators; pressure is back to normal.",
+            picked_up=48, done=30, confirmed_by=SECOND_EMPLOYEE, confirmed=96,
+        ),
+    ),
+    # -------------------------------------------------------------- Cleaning
+    SeedIncident(
+        "Coffee spill on the carpet at 3-01", "A full mug; it will stain if left.",
+        EMPLOYEE, Priority.LOW, "HQ", days_ago=0.3, category=_CLEANING, floor=3, seat="3-01",
+    ),
+    SeedIncident(
+        "Bins overflowing in the Support area", "Not emptied since Friday.",
+        SECOND_EMPLOYEE, Priority.MEDIUM, "RVA", days_ago=1, category=_CLEANING, floor=2,
+        steps=(_assign(HVAC_ENGINEER, 3),),
+    ),
+    SeedIncident(
+        "Sticky floor in the lobby", "Something spilled by the turnstiles overnight.",
+        EMPLOYEE, Priority.LOW, "HQ", days_ago=6, category=_CLEANING, floor=1,
+        steps=_fixed(HVAC_ENGINEER, "Mopped and degreased the area.", picked_up=1, done=2),
+    ),
+    SeedIncident(
+        "Broken glass in the Riverside car park", "A smashed bottle by the bike racks.",
+        SECOND_EMPLOYEE, Priority.HIGH, "RVA", days_ago=13, category=_CLEANING, floor=1,
+        steps=_fixed(
+            HVAC_ENGINEER, "Swept and disposed of the glass.",
+            picked_up=0.5, done=1, confirmed_by=SECOND_EMPLOYEE, confirmed=3,
+        ),
+    ),
+    SeedIncident(
+        "Fridge on floor 2 needs clearing out", "Something in there has gone very bad.",
+        EMPLOYEE, Priority.LOW, "HQ", days_ago=30, category=_CLEANING, floor=2,
+        steps=_fixed(
+            HVAC_ENGINEER, "Emptied, cleaned and put a clear-out notice on the door.",
+            picked_up=6, done=18, confirmed_by=EMPLOYEE,
+        ),
+    ),
+    SeedIncident(
+        "Mould around the third-floor window", "Black mould spreading along the sill.",
+        SECOND_EMPLOYEE, Priority.MEDIUM, "HQ", days_ago=44, category=_CLEANING, floor=3,
+        steps=(
+            _assign(HVAC_ENGINEER, 8),
+            _block(HVAC_ENGINEER, 3, "Needs the window seal fixed first; contractor booked."),
+            _unblock(HVAC_ENGINEER, 168),
+            _resolve(HVAC_ENGINEER, 5, "Seal replaced and the sill treated and repainted."),
+            _close(SECOND_EMPLOYEE, 40),
+        ),
+    ),
+    SeedIncident(
+        "Bird droppings on the entrance canopy",
+        "The glass canopy is filthy and visible from inside.",
+        EMPLOYEE, Priority.LOW, "HQ", days_ago=80, category=_CLEANING, floor=1,
+        steps=_fixed(
+            HVAC_ENGINEER, "Window cleaners did the canopy on their visit.",
+            picked_up=50, done=140, confirmed_by=EMPLOYEE, confirmed=30,
+        ),
+    ),
+    # --------------------------------------------------------------- Monitor
+    SeedIncident(
+        "Dead pixels on the monitor at 3-03", "A cluster of dead pixels in the top-left corner.",
+        EMPLOYEE, Priority.LOW, "HQ", days_ago=0.8, category=_MONITOR, floor=3, seat="3-03",
+    ),
+    SeedIncident(
+        "Second monitor missing at desk 2-02", "Only one screen on the desk since I moved here.",
+        SECOND_EMPLOYEE, Priority.MEDIUM, "HQ", days_ago=2, category=_MONITOR, floor=2, seat="2-02",
+        steps=(_assign(IT_ENGINEER, 4),),
+    ),
+    SeedIncident(
+        "Monitor arm sagging at 1-01", "The arm drops slowly until the screen rests on the desk.",
+        EMPLOYEE, Priority.LOW, "HQ", days_ago=8, category=_MONITOR, floor=1, seat="1-01",
+        steps=_fixed(IT_ENGINEER, "Re-tensioned the gas spring.", done=26),
+    ),
+    SeedIncident(
+        "Screen won't wake from sleep at RVA 2-01", "Has to be unplugged and plugged back in.",
+        SECOND_EMPLOYEE, Priority.MEDIUM, "RVA", days_ago=17, category=_MONITOR, floor=2,
+        seat="2-01",
+        steps=_fixed(
+            IT_ENGINEER, "Updated the monitor firmware.", picked_up=5, confirmed_by=SECOND_EMPLOYEE,
+        ),
+    ),
+    SeedIncident(
+        "Cracked monitor at 3-01 after the desk move", "A crack across the bottom of the panel.",
+        EMPLOYEE, Priority.HIGH, "HQ", days_ago=29, category=_MONITOR, floor=3, seat="3-01",
+        steps=_fixed(IT_ENGINEER, "Replaced the monitor from stock.", done=4,
+            confirmed_by=EMPLOYEE),
+    ),
+    SeedIncident(
+        "Wrong resolution on the boardroom display", "Everything is stretched on the big screen.",
+        SECOND_EMPLOYEE, Priority.MEDIUM, "HQ", days_ago=52, category=_MONITOR, floor=3,
+        steps=_fixed(
+            IT_ENGINEER, "Set the display to native 4K and locked the scaling.",
+            picked_up=3, done=2, confirmed_by=SECOND_EMPLOYEE, confirmed=6,
+        ),
+    ),
+    SeedIncident(
+        "Monitor at 2-01 shows a pink tint", "Whites look pink on the right-hand screen.",
+        EMPLOYEE, Priority.LOW, "HQ", days_ago=66, category=_MONITOR, floor=2, seat="2-01",
+        steps=(_close(ADMIN, 30, "Screen was replaced during the floor-wide monitor refresh."),),
+    ),
+    # --------------------------------------------------------------- Network
+    SeedIncident(
+        "Wi-Fi drops every few minutes on floor 3", "Calls keep freezing across the whole floor.",
+        EMPLOYEE, Priority.HIGH, "HQ", days_ago=0.4, category=_NETWORK, floor=3,
+    ),
+    SeedIncident(
+        "No network at the Riverside reception desk", "Visitor sign-in tablet cannot connect.",
+        SECOND_EMPLOYEE, Priority.HIGH, "RVA", days_ago=1.2, category=_NETWORK, floor=1,
+            seat="1-01",
+        steps=(_assign(IT_ENGINEER, 1),),
+    ),
+    SeedIncident(
+        "VPN keeps disconnecting from the Support floor",
+        "Drops every 10 minutes since the weekend.",
+        EMPLOYEE, Priority.MEDIUM, "RVA", days_ago=4.5, category=_NETWORK, floor=2,
+        steps=(
+            _assign(IT_ENGINEER, 2),
+            _block(IT_ENGINEER, 6, "Waiting on the ISP to replace the faulty line card."),
+        ),
+    ),
+    SeedIncident(
+        "Slow file transfers in Engineering", "Copying to the share runs at a few MB/s.",
+        SECOND_EMPLOYEE, Priority.MEDIUM, "HQ", days_ago=10, category=_NETWORK, floor=2,
+        steps=_fixed(IT_ENGINEER, "Found a port negotiating at 100 Mb; replaced the patch lead."),
+    ),
+    SeedIncident(
+        "Ethernet port dead at 2-04", "No link light with any cable.",
+        EMPLOYEE, Priority.MEDIUM, "HQ", days_ago=21, category=_NETWORK, floor=2, seat="2-04",
+        steps=_fixed(IT_ENGINEER, "Re-patched the port in the comms room.", confirmed_by=EMPLOYEE),
+    ),
+    SeedIncident(
+        "Guest Wi-Fi password rejected in the lobby",
+        "Visitors cannot get on with the printed code.",
+        SECOND_EMPLOYEE, Priority.LOW, "HQ", days_ago=38, category=_NETWORK, floor=1,
+        steps=_fixed(
+            IT_ENGINEER, "Rotated the guest passphrase and reprinted the cards.",
+            picked_up=6, done=3, confirmed_by=SECOND_EMPLOYEE,
+        ),
+    ),
+    SeedIncident(
+        "Whole of Riverside offline this morning", "Nothing works: no Wi-Fi, no wired, no phones.",
+        EMPLOYEE, Priority.CRITICAL, "RVA", days_ago=58, category=_NETWORK, floor=1,
+        steps=_fixed(
+            IT_ENGINEER, "Core switch power supply failed; swapped in the spare.",
+            picked_up=0.25, done=2, confirmed_by=EMPLOYEE, confirmed=3,
+        ),
+    ),
+    SeedIncident(
+        "Printer unreachable over the network on floor 3", "Print jobs sit in the queue forever.",
+        SECOND_EMPLOYEE, Priority.MEDIUM, "HQ", days_ago=74, category=_NETWORK, floor=3,
+        steps=_fixed(
+            IT_ENGINEER, "The printer had picked up a new IP; pinned its DHCP reservation.",
+            picked_up=4, done=5, confirmed_by=SECOND_EMPLOYEE,
+        ),
+    ),
+    # --------------------------------------------------------------- Printer
+    SeedIncident(
+        "Printer on floor 3 out of toner", "Black toner empty; the light has been on for days.",
+        EMPLOYEE, Priority.LOW, "HQ", days_ago=0.6, category=_PRINTER, floor=3,
+    ),
+    SeedIncident(
+        "Riverside printer prints blank pages", "Every page comes out white.",
+        SECOND_EMPLOYEE, Priority.MEDIUM, "RVA", days_ago=3.5, category=_PRINTER, floor=1,
+        steps=(_assign(IT_ENGINEER, 3),),
+    ),
+    SeedIncident(
+        "Duplex printing broken on the Finance printer", "Double-sided jobs come out single-sided.",
+        EMPLOYEE, Priority.LOW, "HQ", days_ago=14, category=_PRINTER, floor=3,
+        steps=_fixed(IT_ENGINEER, "Reinstalled the driver with the duplex unit enabled.", done=40),
+    ),
+    SeedIncident(
+        "Printer on floor 2 streaking every page", "A grey band down the left of every page.",
+        SECOND_EMPLOYEE, Priority.MEDIUM, "HQ", days_ago=23, category=_PRINTER, floor=2,
+        steps=_fixed(IT_ENGINEER, "Replaced the drum unit.", confirmed_by=SECOND_EMPLOYEE),
+    ),
+    SeedIncident(
+        "Scanner-to-email failing on the lobby printer", "Scans never arrive; the panel says sent.",
+        EMPLOYEE, Priority.MEDIUM, "HQ", days_ago=46, category=_PRINTER, floor=1,
+        steps=_fixed(
+            IT_ENGINEER, "Updated the SMTP relay credentials on the device.",
+            picked_up=8, done=6, confirmed_by=EMPLOYEE, confirmed=10,
+        ),
+    ),
+    SeedIncident(
+        "Paper tray 2 won't close on the Support printer", "The tray is jammed half open.",
+        SECOND_EMPLOYEE, Priority.LOW, "RVA", days_ago=84, category=_PRINTER, floor=2,
+        steps=_fixed(
+            IT_ENGINEER, "Removed a bent sheet from the guide and reseated the tray.",
+            picked_up=24, done=10, confirmed_by=SECOND_EMPLOYEE, confirmed=50,
+        ),
+    ),
+    # ------------------------------------------------------- Docking Station
+    SeedIncident(
+        "Dock not charging the laptop at 2-03", "Screens work but the battery keeps draining.",
+        SECOND_EMPLOYEE, Priority.MEDIUM, "HQ", days_ago=0.9, category=_DOCK, floor=2, seat="2-03",
+    ),
+    SeedIncident(
+        "Docking station missing from hot desk 1-02 at Riverside",
+        "Desk has a monitor but no dock.",
+        EMPLOYEE, Priority.MEDIUM, "RVA", days_ago=2.2, category=_DOCK, floor=1, seat="1-02",
+        steps=(_assign(IT_ENGINEER, 6),),
+    ),
+    SeedIncident(
+        "Dock at 3-02 drops USB devices", "Keyboard and mouse disconnect a few times an hour.",
+        SECOND_EMPLOYEE, Priority.LOW, "HQ", days_ago=12, category=_DOCK, floor=3, seat="3-02",
+        steps=_fixed(IT_ENGINEER, "Updated the dock firmware and swapped the host cable."),
+    ),
+    SeedIncident(
+        "Dock at RVA 2-02 only drives one screen", "The second monitor is never detected.",
+        EMPLOYEE, Priority.MEDIUM, "RVA", days_ago=26, category=_DOCK, floor=2, seat="2-02",
+        steps=_fixed(
+            IT_ENGINEER, "Replaced the dock; the old one had a dead DisplayPort.",
+            picked_up=5, done=22, confirmed_by=EMPLOYEE,
+        ),
+    ),
+    SeedIncident(
+        "Dock firmware prompt blocking sign-in at 2-02", "A firmware dialog appears on every boot.",
+        SECOND_EMPLOYEE, Priority.HIGH, "HQ", days_ago=35, category=_DOCK, floor=2, seat="2-02",
+        steps=_fixed(
+            IT_ENGINEER, "Applied the firmware update and cleared the prompt.",
+            picked_up=1, done=3, confirmed_by=SECOND_EMPLOYEE, confirmed=5,
+        ),
+    ),
+    SeedIncident(
+        "Loose power connector on the dock at 3-04", "Wiggling the cable makes the dock reboot.",
+        EMPLOYEE, Priority.LOW, "HQ", days_ago=50, category=_DOCK, floor=3, seat="3-04",
+        steps=(
+            _assign(IT_ENGINEER, 10),
+            _resolve(IT_ENGINEER, 20, "Replaced the power adapter."),
+            _reopen(EMPLOYEE, 30),
+            _resolve(IT_ENGINEER, 26,
+                "The socket on the dock itself was loose; replaced the dock."),
+            _close(EMPLOYEE, 18),
+        ),
+    ),
+)
+
+SEED_INCIDENTS: Final[tuple[SeedIncident, ...]] = _FIRST_INCIDENTS + _MORE_INCIDENTS
 
 _STAMP_FIELDS = frozenset(f for fields in STAMP_ON_ENTER.values() for f in fields)
 
