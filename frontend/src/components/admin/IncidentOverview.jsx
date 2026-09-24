@@ -15,6 +15,7 @@ import Typography from '@mui/material/Typography'
 import { formatDuration } from '../../lib/format'
 import { RANGE_PRESETS, buildingBars, engineerBars, rangeEnding } from '../../lib/reports'
 import { useLoad } from '../../lib/useLoad'
+import { loadLevel } from '../../lib/users'
 import { listEngineers } from '../../services/facilities'
 import { listIncidents } from '../../services/incidents'
 import { fetchBuildings, fetchEngineers } from '../../services/reports'
@@ -99,6 +100,9 @@ function EngineerTable({ rows }) {
   )
 }
 
+/** How loud each load level is: only High needs to stand out. */
+const LOAD_COLOURS = { Low: 'success.main', Medium: 'text.secondary', High: 'warning.main' }
+
 /** The engineers marked available right now, lightest load first. */
 function loadAvailable() {
   return listEngineers({ is_available: true, sort: 'open_assignments', order: 'asc' })
@@ -134,7 +138,7 @@ function AvailableEngineers() {
           }}
         >
           {items.map((engineer) => {
-            const full = engineer.open_assignments >= engineer.max_concurrent_incidents
+            const level = loadLevel(engineer)
             return (
               <Box
                 component="li"
@@ -149,10 +153,9 @@ function AvailableEngineers() {
                 </Typography>
                 <Typography
                   variant="body2"
-                  sx={{ mt: 0.5, fontVariantNumeric: 'tabular-nums', color: full ? 'warning.main' : 'text.secondary' }}
+                  sx={{ mt: 0.5, fontWeight: 500, color: LOAD_COLOURS[level] }}
                 >
-                  {engineer.open_assignments} of {engineer.max_concurrent_incidents} open
-                  {full ? ', at capacity' : ''}
+                  {level} load
                 </Typography>
               </Box>
             )
