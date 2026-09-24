@@ -328,7 +328,7 @@ def has_pending_escalation(session: Session, incident_id: uuid.UUID) -> bool:
 
 
 def active_admin_ids(session: Session) -> list[uuid.UUID]:
-    """Every active Facility Admin, the audience for a newly reported incident."""
+    """Every active Facility Admin: the audience for a report, a resolution and a close."""
     return list(
         session.scalars(
             select(User.id).where(User.role == Role.FACILITY_ADMIN, User.is_active.is_(True))

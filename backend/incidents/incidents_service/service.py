@@ -230,30 +230,35 @@ _OUTCOME_KINDS = {
 }
 
 
-def _notify_reporter(
+def _notify_of_outcome(
     session: Session,
     principal: Principal,
     incident: Incident,
     target: IncidentStatus,
     at: dt.datetime,
 ) -> None:
-    """Tell the reporter their incident was resolved or closed.
+    """Tell the reporter and every active admin that an incident was resolved or closed.
 
-    Only for the two outcomes a reporter waits on, and only when someone
-    else took the step: a reporter who confirms and closes their own
-    incident already knows.
+    Only for the two outcomes people wait on. The reporter hears because it
+    is their incident; the admins because they triage and want to see work
+    land. Whoever took the step is skipped, so a reporter who confirms and
+    closes their own incident, or an admin who closes one, is not told about
+    their own act.
     """
     kind = _OUTCOME_KINDS.get(target)
-    if kind is None or incident.reporter_id == principal.user_id:
+    if kind is None:
         return
-    repo.add_notification(
-        session,
-        user_id=incident.reporter_id,
-        incident=incident,
-        kind=kind,
-        actor_id=principal.user_id,
-        at=at,
-    )
+    audience = {incident.reporter_id, *repo.active_admin_ids(session)}
+    audience.discard(principal.user_id)
+    for user_id in sorted(audience):
+        repo.add_notification(
+            session,
+            user_id=user_id,
+            incident=incident,
+            kind=kind,
+            actor_id=principal.user_id,
+            at=at,
+        )
 
 
 def list_notifications(
@@ -534,7 +539,7 @@ def transition(
     incident.status = target
     session.flush()
     _notify_assignee(session, principal, incident, previous_assignee_id, now)
-    _notify_reporter(session, principal, incident, target, now)
+    _notify_of_outcome(session, principal, incident, target, now)
     session.flush()
     _logger.info(
         "incident_transitioned",
