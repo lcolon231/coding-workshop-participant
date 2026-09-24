@@ -151,15 +151,17 @@ class BuildingsReport(_Window):
 class EngineerRow(ResponseModel):
     """One engineer's workload over the window.
 
-    `assigned_count` is every incident in the window assigned to them now;
-    `open_count` the share of those still not Resolved or Closed;
-    `completed_count` those they resolved (Resolved or Closed with a
-    resolution). `mean_resolve_seconds` is over the completed ones; null when
-    there are none.
+    `specialty` is the trade from their engineer profile (null only for an
+    Engineer created without one). `assigned_count` is every incident in the
+    window assigned to them now; `open_count` the share of those still not
+    Resolved or Closed; `completed_count` those they resolved (Resolved or
+    Closed with a resolution). `mean_resolve_seconds` is over the completed
+    ones; null when there are none.
     """
 
     engineer_id: uuid.UUID
     engineer: str
+    specialty: str | None
     is_active: bool
     assigned_count: int
     open_count: int

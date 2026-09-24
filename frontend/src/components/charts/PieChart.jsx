@@ -52,9 +52,11 @@ function fold(slices) {
  * hovering or focusing one shows its numbers in a tooltip, including any
  * `detail` rows the slice carries (finished and open, say).
  *
- * `slices`: `{ key, label, value, slot?, detail?: [{ name, value, slot }] }`.
+ * `slices`: `{ key, label, role?, value, slot?, detail?: [{ name, value, slot }] }`.
  * `slot` pins a colour so the same thing keeps its hue across charts; slices
- * without one take the next free slot in rank order.
+ * without one take the next free slot in rank order. `role` is a short
+ * qualifier (an engineer's specialty) shown under the label in the legend
+ * and the tooltip, and read out with the slice.
  */
 export default function PieChart({ slices, ariaLabel, unit = 'incidents' }) {
   const theme = useTheme()
@@ -89,7 +91,8 @@ export default function PieChart({ slices, ariaLabel, unit = 'incidents' }) {
       <Box sx={{ position: 'relative', flexShrink: 0, width: SIZE, height: SIZE }}>
         <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} role="img" aria-label={ariaLabel} style={{ display: 'block', fontFamily: 'inherit' }}>
           {segments.map((segment, index) => {
-            const summary = `${segment.label}: ${segment.value} ${segment.value === 1 ? unit.replace(/s$/, '') : unit}, ${segment.share}%`
+            const who = segment.role ? `${segment.label} (${segment.role})` : segment.label
+            const summary = `${who}: ${segment.value} ${segment.value === 1 ? unit.replace(/s$/, '') : unit}, ${segment.share}%`
             const dim = active !== null && active !== index
             return (
               <path
@@ -150,6 +153,11 @@ export default function PieChart({ slices, ariaLabel, unit = 'incidents' }) {
             <Typography variant="body2" sx={{ fontWeight: 600 }}>
               {current.label}
             </Typography>
+            {current.role && (
+              <Typography variant="body2" color="text.secondary">
+                {current.role}
+              </Typography>
+            )}
             {(current.detail ?? [])
               .filter((row) => row.value > 0)
               .map((row) => (
@@ -197,9 +205,16 @@ export default function PieChart({ slices, ariaLabel, unit = 'incidents' }) {
                 borderColor: 'divider',
               }}
             />
-            <Typography variant="body2" noWrap>
-              {segment.label}
-            </Typography>
+            <Box sx={{ minWidth: 0 }}>
+              <Typography variant="body2" noWrap>
+                {segment.label}
+              </Typography>
+              {segment.role && (
+                <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
+                  {segment.role}
+                </Typography>
+              )}
+            </Box>
             <Typography variant="body2" sx={{ fontVariantNumeric: 'tabular-nums', textAlign: 'right' }}>
               {segment.value}
             </Typography>

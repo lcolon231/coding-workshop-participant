@@ -25,8 +25,9 @@ const NOTE = {
   created_at: '2026-09-22T10:00:00Z',
 }
 const HISTORY = [
-  { id: 'h-1', from_status: null, to_status: 'Open', actor_id: EMPLOYEE.id, actor: EMPLOYEE, note: null, created_at: '2026-09-22T09:12:00Z' },
-  { id: 'h-2', from_status: 'Open', to_status: 'In Progress', actor_id: ENGINEER.id, actor: ENGINEER, note: null, created_at: '2026-09-22T09:40:00Z' },
+  { id: 'h-1', from_status: null, to_status: 'Open', actor_id: EMPLOYEE.id, actor: EMPLOYEE, assignee_id: null, assignee: null, note: null, created_at: '2026-09-22T09:12:00Z' },
+  { id: 'h-2', from_status: 'Open', to_status: 'Open', actor_id: ADMIN.id, actor: ADMIN, assignee_id: ENGINEER.id, assignee: ENGINEER, note: null, created_at: '2026-09-22T09:30:00Z' },
+  { id: 'h-3', from_status: 'Open', to_status: 'In Progress', actor_id: ENGINEER.id, actor: ENGINEER, assignee_id: null, assignee: null, note: null, created_at: '2026-09-22T09:40:00Z' },
 ]
 
 /** The detail endpoints for one incident, with the incident itself overridable per call. */
@@ -62,8 +63,11 @@ describe('IncidentPage', () => {
     expect(screen.getByText('Condensate pump ordered.')).toBeInTheDocument()
     expect(screen.getByText('Internal')).toBeInTheDocument()
     const history = within(screen.getByRole('region', { name: 'History' }))
-    expect(history.getByText('Reported')).toBeInTheDocument()
-    expect(history.getByText('In Progress')).toBeInTheDocument()
+    expect(history.getAllByRole('listitem').map((item) => item.textContent.replace(/^.*?(?=Reported|Assigned|In Progress)/, ''))).toEqual([
+      `Reported by ${EMPLOYEE.full_name}`,
+      `Assigned to ${ENGINEER.full_name} by ${ADMIN.full_name}`,
+      `In Progress from Open, by ${ENGINEER.full_name}`,
+    ])
     expect(await screen.findByText('Headquarters, level 3')).toBeInTheDocument()
   })
 

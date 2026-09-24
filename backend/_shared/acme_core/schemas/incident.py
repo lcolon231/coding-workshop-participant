@@ -138,13 +138,20 @@ class NoteOut(ResponseModel):
 
 
 class StatusHistoryOut(ResponseModel):
-    """One recorded status change."""
+    """One recorded status change or assignment.
+
+    `assignee` is the engineer this event handed the incident to, or null
+    when it changed no hands. A plain assignment (edit, no status change)
+    has `from_status == to_status`.
+    """
 
     id: uuid.UUID
     from_status: IncidentStatus | None
     to_status: IncidentStatus
     actor_id: uuid.UUID
     actor: UserSummary
+    assignee_id: uuid.UUID | None
+    assignee: UserSummary | None
     note: str | None
     created_at: dt.datetime
 

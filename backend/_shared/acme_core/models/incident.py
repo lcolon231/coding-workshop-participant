@@ -143,11 +143,14 @@ class IncidentNote(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 
 class IncidentStatusHistory(UUIDPrimaryKeyMixin, Base):
-    """An append-only record of one status change.
+    """An append-only record of one status change or assignment.
 
     The audit trail. The stamped columns on `incidents` are a denormalised
     convenience for reporting; this table is the source of truth for what
-    happened, when, and who did it.
+    happened, when, and who did it. `assignee_id` names the engineer the
+    event handed the incident to, when it did: on a transition that also
+    assigned, or on a plain assignment, which keeps `from_status` equal to
+    `to_status`.
     """
 
     __tablename__ = "incident_status_history"
@@ -167,6 +170,10 @@ class IncidentStatusHistory(UUIDPrimaryKeyMixin, Base):
     actor_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
     )
+    # The engineer this event assigned; null when it changed no hands.
+    assignee_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
@@ -174,6 +181,7 @@ class IncidentStatusHistory(UUIDPrimaryKeyMixin, Base):
 
     incident: Mapped["Incident"] = relationship(back_populates="status_history")
     actor: Mapped["User"] = relationship(foreign_keys=[actor_id])
+    assignee: Mapped[Optional["User"]] = relationship(foreign_keys=[assignee_id])
 
     __table_args__ = (
         Index("ix_incident_status_history_incident_id", "incident_id", "created_at"),

@@ -27,6 +27,7 @@ from sqlalchemy.sql.elements import ColumnElement
 from acme_core.models import (
     Building,
     Category,
+    EngineerProfile,
     EscalationRequest,
     EscalationStatus,
     Floor,
@@ -170,6 +171,8 @@ def add_history(
     to_status: IncidentStatus,
     actor_id: uuid.UUID,
     note: str | None,
+    *,
+    assignee_id: uuid.UUID | None = None,
     at: dt.datetime,
 ) -> IncidentStatusHistory:
     """Append one row to the audit trail. Flushed with the request.
@@ -185,6 +188,7 @@ def add_history(
         from_status=from_status,
         to_status=to_status,
         actor_id=actor_id,
+        assignee_id=assignee_id,
         note=note,
         created_at=at,
     )
@@ -201,7 +205,9 @@ def list_history(
     """Page through an incident's status changes, reachable only inside scope."""
     statement = (
         select(IncidentStatusHistory)
-        .options(selectinload(IncidentStatusHistory.actor))
+        .options(
+            selectinload(IncidentStatusHistory.actor), selectinload(IncidentStatusHistory.assignee)
+        )
         .where(
             IncidentStatusHistory.incident_id == incident_id,
             IncidentStatusHistory.incident_id.in_(visible_incident_ids(principal)),
@@ -602,8 +608,10 @@ def engineer_rows(session: Session, window: ReportRange) -> Sequence[Row[Any]]:
     so an incident closed without work (Open -> Closed) counts for nobody.
 
     Returns:
-        Per engineer: id, name, is_active, assigned, open, completed, and the
-        mean seconds from report to resolution over the completed ones.
+        Per engineer: id, name, specialty, is_active, assigned, open,
+        completed, and the mean seconds from report to resolution over the
+        completed ones. The specialty is null for an engineer without a
+        profile, which the user service does not create but the schema allows.
     """
     completed = Incident.status.in_(_FINISHED) & Incident.resolved_at.isnot(None)
     resolve = func.extract("epoch", Incident.resolved_at - Incident.created_at)
@@ -613,6 +621,7 @@ def engineer_rows(session: Session, window: ReportRange) -> Sequence[Row[Any]]:
         select(
             User.id,
             User.full_name,
+            EngineerProfile.specialty,
             User.is_active,
             assigned,
             _count_where(Incident.status.notin_(_FINISHED)),
@@ -620,13 +629,14 @@ def engineer_rows(session: Session, window: ReportRange) -> Sequence[Row[Any]]:
             func.avg(case((completed, resolve))),
         )
         .select_from(User)
+        .join(EngineerProfile, EngineerProfile.user_id == User.id, isouter=True)
         .join(
             Incident,
             and_(Incident.assignee_id == User.id, *_window_conditions(window)),
             isouter=True,
         )
         .where(User.role == Role.ENGINEER)
-        .group_by(User.id)
+        .group_by(User.id, EngineerProfile.specialty)
         .having(or_(User.is_active.is_(True), assigned > 0))
         .order_by(done.desc(), assigned.desc(), User.full_name, User.id)
     )
