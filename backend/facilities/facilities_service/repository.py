@@ -51,8 +51,14 @@ _SEAT_SORTS: Mapping[str, ColumnElement[Any]] = {"code": Seat.code, "label": Sea
 _CATEGORY_SORTS: Mapping[str, ColumnElement[Any]] = {"name": Category.name}
 
 
+# What still counts as work in hand. The same rule as the engineers report,
+# so the "Available now" cards and the workload table agree: a Resolved
+# incident waits on the reporter, not on the engineer.
+_FINISHED = (IncidentStatus.RESOLVED, IncidentStatus.CLOSED)
+
+
 def _open_assignments() -> ColumnElement[Any]:
-    """Non-closed incidents assigned to the engineer of the enclosing row.
+    """Unfinished incidents assigned to the engineer of the enclosing row.
 
     A correlated scalar subquery rather than a second select column: the
     pager keeps only the first column of a statement, and this way the
@@ -63,7 +69,7 @@ def _open_assignments() -> ColumnElement[Any]:
         .select_from(Incident)
         .where(
             Incident.assignee_id == EngineerProfile.user_id,
-            Incident.status != IncidentStatus.CLOSED,
+            Incident.status.notin_(_FINISHED),
         )
         .correlate(EngineerProfile)
         .scalar_subquery()
@@ -368,13 +374,13 @@ def get_engineer(
 
 
 def open_assignments_for(session: Session, user_ids: Iterable[uuid.UUID]) -> dict[uuid.UUID, int]:
-    """Non-closed incidents per assignee, for one page of engineers in one query."""
+    """Unfinished incidents per assignee, for one page of engineers in one query."""
     ids = list(user_ids)
     if not ids:
         return {}
     rows = session.execute(
         select(Incident.assignee_id, func.count())
-        .where(Incident.assignee_id.in_(ids), Incident.status != IncidentStatus.CLOSED)
+        .where(Incident.assignee_id.in_(ids), Incident.status.notin_(_FINISHED))
         .group_by(Incident.assignee_id)
     ).all()
     return {assignee_id: total for assignee_id, total in rows}

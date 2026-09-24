@@ -28,7 +28,7 @@ const FIELDS = [
     required: true,
     min: 1,
     max: 50,
-    helperText: 'How many non-closed incidents they can hold at once, from 1 to 50.',
+    helperText: 'How many unfinished incidents they can hold at once, from 1 to 50.',
   },
   { name: 'is_available', label: 'Available for new assignments', type: 'checkbox' },
 ]

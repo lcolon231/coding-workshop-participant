@@ -1208,11 +1208,18 @@ class TestEngineerList:
         }
         assert page["items"][1]["user"]["full_name"] == "Bob"
 
-    def test_open_assignments_counts_non_closed_incidents_and_sorts_by_load(
+    def test_open_assignments_counts_unfinished_incidents_and_sorts_by_load(
         self, facilities_client: TestClient, actors: Actors, world: World, make_incident: Any
     ) -> None:
-        for status in (IncidentStatus.IN_PROGRESS, IncidentStatus.BLOCKED, IncidentStatus.CLOSED):
+        """Resolved and Closed are both finished, as in the engineers report."""
+        for status in (
+            IncidentStatus.IN_PROGRESS,
+            IncidentStatus.BLOCKED,
+            IncidentStatus.RESOLVED,
+            IncidentStatus.CLOSED,
+        ):
             make_incident(assignee_id=world.engineer.id, status=status)
+        make_incident(assignee_id=world.other_engineer.id, status=IncidentStatus.OPEN)
         make_incident(assignee_id=world.other_engineer.id, status=IncidentStatus.RESOLVED)
         busiest_first = facilities_client.get(
             f"{P}/engineers",

@@ -24,7 +24,7 @@ class EngineerOut(EngineerProfileOut):
 
     user: UserSummary
     open_assignments: int = Field(
-        description="Non-closed incidents currently assigned to this engineer."
+        description="Incidents assigned to this engineer that are not yet Resolved or Closed."
     )
 
 
