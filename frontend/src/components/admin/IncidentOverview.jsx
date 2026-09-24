@@ -1,7 +1,9 @@
 import { useCallback, useState } from 'react'
+import { Link as RouterLink } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Chip from '@mui/material/Chip'
+import Link from '@mui/material/Link'
 import Skeleton from '@mui/material/Skeleton'
 import Stack from '@mui/material/Stack'
 import Table from '@mui/material/Table'
@@ -14,9 +16,11 @@ import { formatDuration } from '../../lib/format'
 import { RANGE_PRESETS, buildingBars, engineerBars, rangeEnding } from '../../lib/reports'
 import { useLoad } from '../../lib/useLoad'
 import { listEngineers } from '../../services/facilities'
+import { listIncidents } from '../../services/incidents'
 import { fetchBuildings, fetchEngineers } from '../../services/reports'
 import PieChart from '../charts/PieChart'
 import StackedBars from '../charts/StackedBars'
+import { PriorityChip, SlaChip } from '../IncidentChips'
 import { EmptyState, LoadError } from '../PageState'
 
 const DEFAULT_DAYS = 30
@@ -159,6 +163,86 @@ function AvailableEngineers() {
   )
 }
 
+const OVERDUE_SHOWN = 5
+
+/** Open incidents past their D8 target, the most overdue first. */
+function loadOverdue() {
+  return listIncidents({ overdue: 'true', sort: 'due_at', order: 'asc', limit: OVERDUE_SHOWN })
+}
+
+/**
+ * What is breaching its response target right now, judged by the API when
+ * the page loaded. Live like the available engineers, so it ignores the
+ * range. The count is the list's total; the rows are the worst few and the
+ * link opens the list with the overdue filter on for the rest.
+ */
+function OverdueNow() {
+  const { data, loading, error, reload } = useLoad(loadOverdue)
+  const items = data?.items ?? null
+  const total = data?.total ?? 0
+
+  return (
+    <Section
+      id="overview-overdue"
+      title="Overdue now"
+      action={
+        total > 0 && (
+          <Link component={RouterLink} to="/?overdue=1" variant="body2" sx={{ fontWeight: 500 }}>
+            {total === 1 ? 'See the incident' : `See all ${total}`}
+          </Link>
+        )
+      }
+    >
+      {error && (
+        <Box sx={{ mb: 2 }}>
+          <LoadError message={error} onRetry={reload} />
+        </Box>
+      )}
+      {items === null ? (
+        !error && <Skeleton variant="rounded" height={72} />
+      ) : items.length === 0 ? (
+        <EmptyState title="Nothing is overdue" body="Every open incident is inside its response target." />
+      ) : (
+        <Box
+          component="ol"
+          aria-label="Overdue incidents"
+          sx={{ listStyle: 'none', m: 0, p: 0, opacity: loading ? 0.6 : 1 }}
+        >
+          {items.map((incident) => (
+            <Box
+              component="li"
+              key={incident.id}
+              sx={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                alignItems: 'center',
+                gap: 1,
+                py: 1.25,
+                borderBottom: 1,
+                borderColor: 'divider',
+              }}
+            >
+              <Link
+                component={RouterLink}
+                to={`/incidents/${incident.id}`}
+                sx={{ fontWeight: 500, textDecoration: 'none', flex: '1 1 240px', minWidth: 0 }}
+                noWrap
+              >
+                {incident.title}
+              </Link>
+              <Typography variant="body2" color="text.secondary" noWrap sx={{ flex: '0 1 auto' }}>
+                {incident.assignee ? incident.assignee.full_name : 'Unassigned'}
+              </Typography>
+              <PriorityChip priority={incident.priority} />
+              <SlaChip incident={incident} />
+            </Box>
+          ))}
+        </Box>
+      )}
+    </Section>
+  )
+}
+
 /**
  * The admin's view over the list: which buildings generate the incidents,
  * and what each engineer holds and has completed, over the last 7, 30 or
@@ -169,8 +253,9 @@ function AvailableEngineers() {
  * the table views and the workload table. Engineers carry their role (the
  * profile's specialty) in the legend, the tooltip and the table.
  *
- * Below the engineers sits who is available for new work right now. That
- * is live, not a report, so it ignores the range.
+ * Above the buildings sits what is overdue right now and, below the
+ * engineers, who is available for new work. Both are live, not reports, so
+ * they ignore the range.
  */
 export default function IncidentOverview() {
   const [days, setDays] = useState(DEFAULT_DAYS)
@@ -225,6 +310,8 @@ export default function IncidentOverview() {
       </Stack>
 
       <Stack spacing={4}>
+        <OverdueNow />
+
         <Section
           id="overview-buildings"
           title="Buildings"

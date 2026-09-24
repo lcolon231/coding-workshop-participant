@@ -5,6 +5,8 @@
  * the way in or out.
  */
 
+import { formatDuration } from './format'
+
 export const STATUSES = ['Open', 'In Progress', 'Blocked', 'Resolved', 'Closed']
 export const PRIORITIES = ['Low', 'Medium', 'High', 'Critical']
 
@@ -24,6 +26,29 @@ export const PRIORITY_COLOR = {
   Critical: 'error',
 }
 
+/**
+ * The API's `sla_state`, judged when the row was served: open work against
+ * the clock, or finished work against its target. Colour follows urgency;
+ * what is finished and fine stays quiet.
+ */
+export const SLA_COLOR = {
+  on_track: 'default',
+  at_risk: 'warning',
+  breached: 'error',
+  met: 'success',
+  missed: 'error',
+}
+
+/** The words on the chip: a countdown while open, a verdict once finished. */
+export function slaLabel(incident, now = Date.now()) {
+  const state = incident.sla_state
+  if (state === 'met') return 'Met target'
+  if (state === 'missed') return 'Missed target'
+  const remaining = (new Date(incident.due_at).getTime() - now) / 1000
+  if (state === 'breached' || remaining < 0) return `Overdue by ${formatDuration(-remaining)}`
+  return `Due in ${formatDuration(remaining)}`
+}
+
 /** Transitions that move work forward get the filled button; the rest are outlined. */
 export const FORWARD_TRANSITIONS = new Set(['In Progress', 'Resolved', 'Closed'])
 
@@ -31,6 +56,7 @@ export const SORT_OPTIONS = [
   { value: 'created_at:desc', label: 'Newest first' },
   { value: 'created_at:asc', label: 'Oldest first' },
   { value: 'priority:desc', label: 'Priority, high to low' },
+  { value: 'due_at:asc', label: 'Due soonest' },
   { value: 'status:asc', label: 'Status' },
   { value: 'title:asc', label: 'Title, A to Z' },
 ]

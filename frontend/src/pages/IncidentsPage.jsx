@@ -22,7 +22,7 @@ import { visuallyHidden } from '@mui/utils'
 import { ClipboardText, MagnifyingGlass } from '@phosphor-icons/react'
 import { useAuth } from '../auth/AuthContext'
 import IncidentOverview from '../components/admin/IncidentOverview'
-import { PriorityChip, StatusChip } from '../components/IncidentChips'
+import { PriorityChip, SlaChip, StatusChip } from '../components/IncidentChips'
 import Notice from '../components/Notice'
 import { EmptyState, LoadError } from '../components/PageState'
 import { saveTextFile } from '../lib/download'
@@ -44,12 +44,13 @@ function readFilters(params) {
     search: params.get('search') ?? '',
     sort: params.get('sort') ?? DEFAULT_SORT,
     mine: params.get('mine') === '1',
+    overdue: params.get('overdue') === '1',
     page: Number.isFinite(page) && page > 0 ? page : 1,
   }
 }
 
 function hasFilters(filters) {
-  return Boolean(filters.status || filters.priority || filters.search || filters.mine)
+  return Boolean(filters.status || filters.priority || filters.search || filters.mine || filters.overdue)
 }
 
 const selectSx = { minWidth: { xs: '100%', sm: 160 }, '& .MuiSelect-select': { py: 1.25 } }
@@ -93,6 +94,9 @@ function RowSkeleton() {
       <TableCell>
         <Skeleton width={80} />
       </TableCell>
+      <TableCell>
+        <Skeleton width={88} />
+      </TableCell>
     </TableRow>
   )
 }
@@ -107,6 +111,7 @@ function IncidentTable({ items, loading }) {
           <TableCell>Priority</TableCell>
           <TableCell>Assignee</TableCell>
           <TableCell>Reported</TableCell>
+          <TableCell>Target</TableCell>
         </TableRow>
       </TableHead>
       <TableBody>
@@ -139,6 +144,9 @@ function IncidentTable({ items, loading }) {
                   <time dateTime={incident.created_at} title={formatDateTime(incident.created_at)}>
                     {formatRelative(incident.created_at)}
                   </time>
+                </TableCell>
+                <TableCell>
+                  <SlaChip incident={incident} />
                 </TableCell>
               </TableRow>
             ))}
@@ -175,9 +183,10 @@ function IncidentCards({ items, loading }) {
               >
                 {incident.title}
               </Link>
-              <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
+              <Stack direction="row" spacing={1} useFlexGap sx={{ mb: 1, flexWrap: 'wrap' }}>
                 <StatusChip status={incident.status} />
                 <PriorityChip priority={incident.priority} />
+                <SlaChip incident={incident} />
               </Stack>
               <Typography variant="body2" color="text.secondary">
                 {incident.assignee ? `Assigned to ${incident.assignee.full_name}` : 'Unassigned'}
@@ -241,6 +250,7 @@ export default function IncidentsPage() {
       priority: filters.priority,
       search: filters.search,
       assignee_id: filters.mine ? user.id : '',
+      overdue: filters.overdue ? 'true' : '',
     }),
     [filters, user.id],
   )
@@ -373,6 +383,16 @@ export default function IncidentsPage() {
             sx={{ mr: 0 }}
           />
         )}
+        <FormControlLabel
+          control={
+            <Checkbox
+              checked={filters.overdue}
+              onChange={(event) => update({ overdue: event.target.checked })}
+            />
+          }
+          label="Overdue"
+          sx={{ mr: 0 }}
+        />
         {admin && (
           <Button
             variant="outlined"
@@ -393,7 +413,7 @@ export default function IncidentsPage() {
           title={hasFilters(filters) ? 'No incidents match' : 'No incidents yet'}
           body={
             hasFilters(filters)
-              ? 'Try a different status, priority or search.'
+              ? 'Try a different status, priority, search or the overdue switch.'
               : 'Report a facility issue and it will appear here with its progress.'
           }
           action={

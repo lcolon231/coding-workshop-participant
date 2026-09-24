@@ -148,8 +148,11 @@ so nothing in front of the reviewer waits on a cold start.
 3. **The admin is told.** In a second window sign in as `admin@acme.inc`. The bell in the top bar
    shows one unread; open it: "Eve Employee reported …". Click through to the incident.
 4. **Triage.** On the incident, *Acknowledge and start work*, choosing Hank Vance as the assignee
-   (or set the assignee in the triage panel first). Show the admin's landing page: buildings ranked
-   by incidents, engineers by workload, the critical list, and *Download CSV* beside the filters.
+   (or set the assignee in the triage panel first). The chip beside the priority counts down to the
+   response target the landing page promised (High: 24 h). Show the admin's landing page: *Overdue
+   now* at the top (what is breaching its target this minute, worst first, linking to the list with
+   the *Overdue* switch on), then buildings ranked by incidents, engineers by workload, the critical
+   list, and *Download CSV* beside the filters.
 5. **The engineer is told and works it.** Sign in as `hvac.engineer@acme.inc`. The bell shows the
    assignment; click it. *Block on an external dependency* with a reason, *Unblock*, then *Resolve*
    with a resolution note. An internal note is visible to staff only: add one, then show that the

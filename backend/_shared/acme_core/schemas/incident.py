@@ -6,9 +6,10 @@ import datetime as dt
 import uuid
 from typing import Annotated, ClassVar
 
-from pydantic import ConfigDict, Field, field_validator, model_validator
+from pydantic import ConfigDict, Field, computed_field, field_validator, model_validator
 
 from acme_core.models.enums import EscalationStatus, IncidentStatus, NoteVisibility, Priority
+from acme_core.reporting import SlaState, due_at, sla_state
 from acme_core.schemas.auth import UserSummary
 from acme_core.schemas.common import (
     Order,
@@ -99,10 +100,14 @@ class IncidentFilters(PageParams):
     # incidents its reports counted (the same window rule as `ReportRange`).
     created_from: dt.date | None = None
     created_to: dt.date | None = None
+    # True: still open and past its target; False: everything else.
+    overdue: bool | None = None
     # A literal allowlist, never a raw column name. Interpolating a client
     # string into ORDER BY is injectable, and getattr(Model, value) allows
     # traversal onto relationships and dunder attributes.
-    sort: Annotated[str, Field(pattern="^(created_at|priority|status|title)$")] = "created_at"
+    sort: Annotated[str, Field(pattern="^(created_at|priority|status|title|due_at)$")] = (
+        "created_at"
+    )
     order: Order = "desc"
 
     @model_validator(mode="after")
@@ -182,6 +187,29 @@ class IncidentOut(ResponseModel):
     blocked_reason: str | None
     created_at: dt.datetime
     updated_at: dt.datetime
+
+    # Derived at serialisation from the D8 targets, so every list row and
+    # detail carries where it stands against its target without a column
+    # that could drift from `created_at` and `priority`.
+    @computed_field(description="When the incident must be resolved by to meet its target.")
+    @property
+    def due_at(self) -> dt.datetime:
+        return due_at(self.priority, self.created_at)
+
+    @computed_field(
+        description=(
+            "Open work against the clock (on_track, at_risk, breached) or finished "
+            "work against its target (met, missed), judged now."
+        )
+    )
+    @property
+    def sla_state(self) -> SlaState:
+        return sla_state(
+            self.priority,
+            self.created_at,
+            self.resolved_at or self.closed_at,
+            dt.datetime.now(dt.UTC),
+        )
 
 
 class TransitionOption(ResponseModel):

@@ -124,6 +124,8 @@ describe('csv export', () => {
           reporter: { full_name: 'Eve' },
           assignee: null,
           created_at: '2026-09-01T00:00:00Z',
+          due_at: '2026-09-08T00:00:00Z',
+          sla_state: 'on_track',
           acknowledged_at: null,
           resolved_at: null,
           closed_at: null,
@@ -133,9 +135,9 @@ describe('csv export', () => {
       names,
     )
     expect(csv).toBe(
-      'id,title,status,priority,building,reporter,assignee,reported_at,acknowledged_at,resolved_at,closed_at\r\n' +
-        'i1,Leak,Open,Low,"HQ, North",Eve,,2026-09-01T00:00:00Z,,,\r\n' +
-        'i2,Other,Open,Low,b-2,,,x,,,\r\n',
+      'id,title,status,priority,building,reporter,assignee,reported_at,due_at,sla_state,acknowledged_at,resolved_at,closed_at\r\n' +
+        'i1,Leak,Open,Low,"HQ, North",Eve,,2026-09-01T00:00:00Z,2026-09-08T00:00:00Z,on_track,,,\r\n' +
+        'i2,Other,Open,Low,b-2,,,x,,,,,\r\n',
     )
   })
 

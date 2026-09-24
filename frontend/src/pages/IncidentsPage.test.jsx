@@ -87,6 +87,60 @@ describe('IncidentsPage', () => {
     )
   })
 
+  it('shows each row against its response target and filters to the overdue ones', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-09-23T10:00:00Z'))
+    const rows = [
+      incidentFixture({ due_at: '2026-09-23T11:30:00Z', sla_state: 'at_risk' }),
+      incidentFixture({
+        id: 'inc-2',
+        title: 'Lift stuck between floors',
+        priority: 'Critical',
+        due_at: '2026-09-23T08:00:00Z',
+        sla_state: 'breached',
+      }),
+      incidentFixture({ id: 'inc-3', title: 'Fixed in time', status: 'Resolved', sla_state: 'met' }),
+    ]
+    const fetch = stubApi([
+      ['GET', '/api/incidents', ({ url }) => jsonResponse(200, page(url.searchParams.get('overdue') ? [rows[1]] : rows))],
+    ])
+    try {
+      renderList()
+      await screen.findByText('Showing 1 to 3 of 3')
+
+      const table = screen.getByRole('table')
+      expect(within(table).getAllByRole('columnheader').map((cell) => cell.textContent)).toContain('Target')
+      const due = within(table).getByText('Due in 1h 30m')
+      expect(due.closest('.MuiChip-root')).toHaveAttribute('title', expect.stringMatching(/^Target /))
+      expect(within(table).getByText('Overdue by 2h')).toBeInTheDocument()
+      expect(within(table).getByText('Met target')).toBeInTheDocument()
+
+      await userEvent.click(screen.getByRole('checkbox', { name: 'Overdue' }))
+
+      await waitFor(() =>
+        expect(calls(fetch).at(-1)).toBe(
+          'GET /api/incidents?overdue=true&sort=created_at&order=desc&limit=25&offset=0',
+        ),
+      )
+      expect(await screen.findByText('Showing 1 to 1 of 1')).toBeInTheDocument()
+      expect(screen.queryByText('Due in 1h 30m')).not.toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('offers the overdue filter through the URL and sorts by due date', async () => {
+    const fetch = stubApi([['GET', '/api/incidents', () => jsonResponse(200, page(TWO))]])
+    renderList({ initialEntries: ['/?overdue=1'] })
+    await screen.findByText('Showing 1 to 2 of 2')
+
+    expect(screen.getByRole('checkbox', { name: 'Overdue' })).toBeChecked()
+    expect(calls(fetch)[0]).toContain('overdue=true')
+
+    await userEvent.selectOptions(screen.getByLabelText('Sort by'), 'Due soonest')
+    await waitFor(() => expect(calls(fetch).at(-1)).toContain('sort=due_at&order=asc'))
+  })
+
   it('debounces the search box into the request', async () => {
     const fetch = stubApi([['GET', '/api/incidents', () => jsonResponse(200, page(TWO))]])
     renderList()
@@ -169,8 +223,12 @@ describe('IncidentsPage', () => {
     expect(calls(fetch)).toContain('GET /api/incidents?status=Blocked&sort=created_at&order=asc&limit=100&offset=100')
     expect(click).toHaveBeenCalledTimes(1)
     const text = await saved[0].text()
-    expect(text.split('\r\n')[0]).toBe('id,title,status,priority,building,reporter,assignee,reported_at,acknowledged_at,resolved_at,closed_at')
-    expect(text).toContain('inc-2,Lift stuck between floors,In Progress,High,HQ,Eve Employee,Hank Vance,2026-09-22T09:12:00Z,,,')
+    expect(text.split('\r\n')[0]).toBe(
+      'id,title,status,priority,building,reporter,assignee,reported_at,due_at,sla_state,acknowledged_at,resolved_at,closed_at',
+    )
+    expect(text).toContain(
+      'inc-2,Lift stuck between floors,In Progress,High,HQ,Eve Employee,Hank Vance,2026-09-22T09:12:00Z,2026-09-25T09:12:00Z,on_track,,,',
+    )
     click.mockRestore()
   })
 

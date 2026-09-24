@@ -73,11 +73,18 @@ AGE_BUCKETS: Sequence[tuple[str, dt.timedelta | None]] = (
 
 UNCATEGORISED = "Uncategorised"
 
+# `created_at` plus the priority's target: the same arithmetic as the schema's
+# `due_at`, done in SQL so the list can filter and sort on it (api.md D8).
+DUE_AT: ColumnElement[Any] = Incident.created_at + case(
+    {priority: target for priority, target in SLA_TARGETS.items()}, value=Incident.priority
+)
+
 _INCIDENT_SORTS: Mapping[str, ColumnElement[Any]] = {
     "created_at": Incident.created_at,
     "priority": case(PRIORITY_RANK, value=Incident.priority),
     "status": case(_STATUS_RANK, value=Incident.status),
     "title": Incident.title,
+    "due_at": DUE_AT,
 }
 
 # Summaries are embedded in every row, so the users are loaded in one extra
@@ -145,6 +152,10 @@ def list_incidents(
     if filters.assignee_id is not None:
         statement = statement.where(Incident.assignee_id == filters.assignee_id)
     statement = statement.where(*_created_between(filters.created_from, filters.created_to))
+    if filters.overdue is not None:
+        # Judged by the database clock, the same one that stamped `created_at`.
+        overdue = and_(Incident.status.notin_(_FINISHED), DUE_AT < func.now())
+        statement = statement.where(overdue if filters.overdue else ~overdue)
     if filters.search:
         pattern = like_pattern(filters.search)
         statement = statement.where(

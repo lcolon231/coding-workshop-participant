@@ -9,7 +9,7 @@ import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
 import { ArrowLeft, MagnifyingGlass } from '@phosphor-icons/react'
 import { useAuth } from '../auth/AuthContext'
-import { PriorityChip, StatusChip } from '../components/IncidentChips'
+import { PriorityChip, SlaChip, StatusChip } from '../components/IncidentChips'
 import { EmptyState, LoadError } from '../components/PageState'
 import Notice from '../components/Notice'
 import EscalationPanel from '../components/incident/EscalationPanel'
@@ -258,6 +258,7 @@ export default function IncidentPage() {
         <Stack direction="row" spacing={1} sx={{ mt: 1.5, alignItems: 'center', flexWrap: 'wrap' }} useFlexGap>
           <StatusChip status={incident.status} />
           <PriorityChip priority={incident.priority} />
+          <SlaChip incident={incident} />
           <Typography variant="body2" color="text.secondary">
             Reported by {incident.reporter.full_name}{' '}
             <time dateTime={incident.created_at} title={formatDateTime(incident.created_at)}>
@@ -372,6 +373,9 @@ export default function IncidentPage() {
               </Detail>
               <Detail term="Reported">
                 <Stamp iso={incident.created_at} />
+              </Detail>
+              <Detail term="Target">
+                <Stamp iso={incident.due_at} />
               </Detail>
               <Detail term="Acknowledged">
                 <Stamp iso={incident.acknowledged_at} />
