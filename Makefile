@@ -60,7 +60,7 @@ seed: migrate ## Seed demo users locally: ACME_SEED_PASSWORD=... make seed (idem
 test: ## Run the test suite
 	$(PYTEST)
 
-cov: ## Run tests with coverage against the current ratchet
+cov: ## Run tests with coverage against the current ratchet (report in backend/coverage, like frontend/coverage)
 	$(PYTEST) --cov --cov-report=term-missing --cov-report=html
 
 lint: ## Ruff + bandit, matching what CI runs
@@ -90,4 +90,4 @@ seed-cloud: ## Seed the deployed database (requires ADMIN_PASSWORD and confirm)
 
 clean: ## Remove vendored copies, caches and coverage output
 	find backend -name '__pycache__' -type d -prune -exec rm -rf {} + 2>/dev/null || true
-	rm -rf backend/*/acme_core .pytest_cache htmlcov .coverage .coverage.*
+	rm -rf backend/*/acme_core .pytest_cache backend/coverage

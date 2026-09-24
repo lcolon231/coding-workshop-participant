@@ -123,17 +123,20 @@ returns `{items, total, limit, offset}`; every error `{error, message, details[]
 | Tier | Command | What it proves | Latest result |
 |---|---|---|---|
 | Backend lint | `make lint` | ruff and bandit, exactly what CI runs | clean |
-| Backend unit + integration | `make cov` | Every endpoint for every role against a throwaway PostgreSQL database it creates, migrates and drops; the 404-not-403 pair on the same id; every workflow edge with its history rows and stamps; model-versus-migration drift | 1716 passed, 99.83 % coverage, ratchet 98 % |
+| Backend unit + integration | `make cov` | Every endpoint for every role against a throwaway PostgreSQL database it creates, migrates and drops; the 404-not-403 pair on the same id; every workflow edge with its history rows and stamps; model-versus-migration drift | 1741 passed, 99.86 % coverage, ratchet 98 % |
 | Frontend lint | `cd frontend && npm run lint` | ESLint | clean |
-| Frontend unit + component | `cd frontend && npm test` / `npm run test:coverage` | Vitest with React Testing Library against a stubbed API | 153 passed; 88.1 % statements, 81.4 % branches (floors 80 / 75) |
-| End to end | `cd frontend && npm run test:e2e` | Playwright drives the real UI against a real backend it starts on its own throwaway database: register, report, assign, block, resolve, close, and the stranger who gets 404 | 4 passed in about 1.4 min |
+| Frontend unit + component | `cd frontend && npm test` / `npm run test:coverage` | Vitest with React Testing Library against a stubbed API | 190 passed; 88.7 % statements, 81.7 % branches (floors 80 / 75) |
+| End to end | `cd frontend && npm run test:e2e` | Playwright drives the real UI against a real backend it starts on its own throwaway database: register, report, assign, block, resolve, close, and the stranger who gets 404 | 4 passed in about 1.5 min |
+
+Results above were measured on 2026-09-24. Both coverage commands write an HTML report next to the
+code they measure: `backend/coverage/index.html` and `frontend/coverage/index.html`.
 
 CI runs the first four on every push and pull request (`.github/workflows/python.tests.yml`,
-`react.tests.yml`) with a PostgreSQL 17 service container, and uploads both coverage reports as
-artifacts. Known gaps per tier: the end-to-end run needs a local PostgreSQL and `.venv`, so it is not
-in CI, and it times out if started while `make cov` is saturating the machine; the unit tier cannot
-see what only a server shows, so uniqueness and cascade rules are asserted in the integration tier;
-no load test was run (see `NOTES.md`).
+`react.tests.yml`) with a PostgreSQL 17 service container, and uploads both folders as the
+`backend-coverage` and `frontend-coverage` artifacts. Known gaps per tier: the end-to-end run needs
+a local PostgreSQL and `.venv`, so it is not in CI, and it times out if started while `make cov` is
+saturating the machine; the unit tier cannot see what only a server shows, so uniqueness and cascade
+rules are asserted in the integration tier; no load test was run (see `NOTES.md`).
 
 ### Security
 
