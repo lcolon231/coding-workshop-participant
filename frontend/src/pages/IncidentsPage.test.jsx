@@ -251,20 +251,6 @@ describe('IncidentsPage', () => {
     click.mockRestore()
   })
 
-  it('offers "Assigned to me" to engineers only', async () => {
-    const fetch = stubApi([['GET', '/api/incidents', () => jsonResponse(200, page(TWO))]])
-    const { unmount } = renderList({ user: ENGINEER })
-    await screen.findByText('Showing 1 to 2 of 2')
-
-    await userEvent.click(screen.getByRole('checkbox', { name: 'Assigned to me' }))
-    await waitFor(() => expect(calls(fetch).at(-1)).toContain(`assignee_id=${ENGINEER.id}`))
-    unmount()
-
-    renderList({ user: ADMIN })
-    await screen.findByText('Showing 1 to 2 of 2')
-    expect(screen.queryByRole('checkbox', { name: 'Assigned to me' })).not.toBeInTheDocument()
-  })
-
   it('shows the confirmation a page arrived with', async () => {
     stubApi([['GET', '/api/incidents', () => jsonResponse(200, page(TWO))]])
     renderList({

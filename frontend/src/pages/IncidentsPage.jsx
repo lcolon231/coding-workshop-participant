@@ -43,14 +43,13 @@ function readFilters(params) {
     priority: params.get('priority') ?? '',
     search: params.get('search') ?? '',
     sort: params.get('sort') ?? DEFAULT_SORT,
-    mine: params.get('mine') === '1',
     overdue: params.get('overdue') === '1',
     page: Number.isFinite(page) && page > 0 ? page : 1,
   }
 }
 
 function hasFilters(filters) {
-  return Boolean(filters.status || filters.priority || filters.search || filters.mine || filters.overdue)
+  return Boolean(filters.status || filters.priority || filters.search || filters.overdue)
 }
 
 const selectSx = { minWidth: { xs: '100%', sm: 160 }, '& .MuiSelect-select': { py: 1.25 } }
@@ -249,10 +248,9 @@ export default function IncidentsPage() {
       status: filters.status,
       priority: filters.priority,
       search: filters.search,
-      assignee_id: filters.mine ? user.id : '',
       overdue: filters.overdue ? 'true' : '',
     }),
-    [filters, user.id],
+    [filters],
   )
 
   useEffect(() => {
@@ -371,18 +369,6 @@ export default function IncidentsPage() {
             </option>
           ))}
         </FilterSelect>
-        {user.role === 'Engineer' && (
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={filters.mine}
-                onChange={(event) => update({ mine: event.target.checked })}
-              />
-            }
-            label="Assigned to me"
-            sx={{ mr: 0 }}
-          />
-        )}
         <FormControlLabel
           control={
             <Checkbox
